@@ -48,5 +48,6 @@
   "err_steam": "Steam is not available: {0}",
   "steam_missing": "steam_api64.dll was not found — install Helldivers 2, or set the HD2_STEAM_API environment variable to its path.",
   "steam_init": "Steam could not start ({0}). Start and sign in to the Steam client first.",
+  "helper_failed": "The scan program did not answer: {0}",
   "cmd_lobbies": "print the public Helldivers 2 lobbies"
 }

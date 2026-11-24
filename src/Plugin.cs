@@ -31,13 +31,13 @@ namespace Hd2Qd.LobbyBrowser
         {
             new[] { "lobbies", "print the public Helldivers 2 lobbies" },
         };
-
         /// <summary>Optional, with Commands: 0 done, 1 refused, 2 a wrong command line.</summary>
         public static int Run(string command, string[] args, TextWriter output, Dictionary<string, object> host)
         {
             var lang = Words.Lang(host) ?? "en";
+            var home = host != null && host.TryGetValue("home", out var h) ? h as string : null;
             var filters = new Filters();
-            var result = Scanner.Scan(filters, lang, null);
+            var result = Helper.Scan(home, filters, lang, null);
             if (result.Error != null)
             {
                 output.WriteLine(result.Error);

@@ -3,7 +3,11 @@
   <!-- HD2QD.LobbyBrowser.dll: a plugin of HD2 Mod Quick Deploy, a window of its own
        (BrowserWindow.cs). .NET Framework 4.8, as the manager; the file name must be
        HD2QD.<name>.dll. It shares no types with the manager: strings, numbers, bools,
-       delegates and Json shapes only. -->
+       delegates and Json shapes only.
+
+       The scan runs in HD2QD.LobbyBrowser.Helper.exe, built from helper\ and embedded here,
+       because Steam ends the processes that initialise Steamworks for the game's App ID when
+       the game is stopped — the manager must not be one of them (src/Helper.cs). -->
   <PropertyGroup>
     <OutputType>Library</OutputType>
     <TargetFramework>net48</TargetFramework>
@@ -12,7 +16,7 @@
     <Nullable>disable</Nullable>
     <AssemblyName>HD2QD.LobbyBrowser</AssemblyName>
     <RootNamespace>Hd2Qd.LobbyBrowser</RootNamespace>
-    <Version>1.1.0</Version>
+    <Version>1.2.0</Version>
     <Product>HD2QD Lobby Browser</Product>
     <Company>ahe-meow</Company>
     <Copyright>MIT License</Copyright>
@@ -26,8 +30,15 @@
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
   </ItemGroup>
 
+  <!-- Steam.cs, Scanner.cs and Lobby.cs's scan half are the helper's, not this assembly's -->
   <ItemGroup>
-    <Compile Include="*.cs" />
+    <Compile Include="BrowserWindow.cs" />
+    <Compile Include="Helper.cs" />
+    <Compile Include="Lobby.cs" />
+    <Compile Include="Plugin.cs" />
+    <Compile Include="Tables.cs" />
+    <Compile Include="Theme.cs" />
+    <Compile Include="Words.cs" />
   </ItemGroup>
 
   <!-- the text, one file per language (Lang\<tag>.json), embedded as Lang.<tag>.json: Words.cs -->
@@ -39,6 +50,19 @@
     <Page Remove="Ui.xaml" />
     <EmbeddedResource Include="Ui.xaml" LogicalName="Ui.xaml" />
     <Reference Include="System.Web.Extensions" />
+  </ItemGroup>
+
+  <!-- the helper program: built with this project (a reference that contributes no types) and
+       carried inside the DLL, for Helper.cs to write out. The file does not exist on a first
+       build until that reference is built; MSBuild reads it at resource time, after it is. -->
+  <ItemGroup>
+    <ProjectReference Include="..\helper\HD2QD.LobbyBrowser.Helper.csproj">
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <Private>false</Private>
+    </ProjectReference>
+    <EmbeddedResource Include="..\helper\bin\$(Configuration)\net48\HD2QD.LobbyBrowser.Helper.exe">
+      <LogicalName>HD2QD.LobbyBrowser.Helper.exe</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
 
 </Project>

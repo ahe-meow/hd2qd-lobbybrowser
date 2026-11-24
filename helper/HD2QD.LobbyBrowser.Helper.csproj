@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- HD2QD.LobbyBrowser.Helper.exe: the scan, in a process of its own, because Steam ends the
+       processes that initialise Steamworks for the game's App ID when the game is stopped (see
+       src/Helper.cs). 64-bit, as steam_api64.dll is. It links the plugin's own sources; the
+       plugin embeds this program and writes it to the manager's settings folder. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <AssemblyName>HD2QD.LobbyBrowser.Helper</AssemblyName>
+    <RootNamespace>Hd2Qd.LobbyBrowser</RootNamespace>
+    <PlatformTarget>x64</PlatformTarget>
+    <Version>1.2.0</Version>
+    <Product>HD2QD Lobby Browser</Product>
+    <Company>ahe-meow</Company>
+    <Copyright>MIT License</Copyright>
+    <Deterministic>true</Deterministic>
+    <PathMap>$(MSBuildProjectDirectory)\..=src</PathMap>
+    <DebugType>none</DebugType>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="..\src\Lobby.cs" Link="Lobby.cs" />
+    <Compile Include="..\src\Scanner.cs" Link="Scanner.cs" />
+    <Compile Include="..\src\Steam.cs" Link="Steam.cs" />
+    <Compile Include="..\src\Tables.cs" Link="Tables.cs" />
+    <Compile Include="..\src\Words.cs" Link="Words.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="..\src\Lang\*.json" LogicalName="Lang.%(Filename).json" />
+    <EmbeddedResource Include="..\src\Data\*.json" LogicalName="Data.%(Filename).json" />
+    <Reference Include="System.Web.Extensions" />
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+
+</Project>

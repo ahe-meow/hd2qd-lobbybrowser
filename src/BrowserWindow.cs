@@ -38,6 +38,7 @@ namespace Hd2Qd.LobbyBrowser
         static readonly bool[] Numeric = { false, false, false, true, false, false, false, false, true };
 
         readonly string _lang;
+        readonly string _home;
         readonly Action<string, string> _foot;
         readonly ListBox _list = new ListBox();
         readonly TextBlock _status = new TextBlock { FontSize = 12, Foreground = Theme.B("Muted"), VerticalAlignment = VerticalAlignment.Center };
@@ -55,6 +56,7 @@ namespace Hd2Qd.LobbyBrowser
         readonly Button _join;
         readonly Button _difficulty;
         int _difficultyValue;
+        string _self = "0";
         bool _busy;
 
         internal Window Host;
@@ -62,6 +64,7 @@ namespace Hd2Qd.LobbyBrowser
         internal LobbyPage(string lang, Dictionary<string, object> host)
         {
             _lang = lang;
+            _home = host != null && host.TryGetValue("home", out var home) ? home as string : null;
             _foot = host != null && host.TryGetValue("foot", out var foot) ? foot as Action<string, string> : null;
 
             _refresh = new Button { Content = Words.Get(lang, "refresh"), Style = Theme.S("Ghost"), MinHeight = 36, Padding = new Thickness(16, 0, 16, 0), Margin = new Thickness(0, 0, 8, 0) };
@@ -325,7 +328,7 @@ namespace Hd2Qd.LobbyBrowser
             var filters = Read();
             var lang = _lang;
             var dispatcher = Host != null ? Host.Dispatcher : Dispatcher.CurrentDispatcher;
-            Task.Run(() => Scanner.Scan(filters, lang, (done, total) =>
+            Task.Run(() => Helper.Scan(_home, filters, lang, (done, total) =>
                     dispatcher.BeginInvoke((Action)(() => SetStatus(Words.F(lang, "scanning_planets", total))))))
                 .ContinueWith(task => dispatcher.BeginInvoke((Action)(() => Finish(task, lang))));
         }
@@ -349,6 +352,7 @@ namespace Hd2Qd.LobbyBrowser
                 return;
             }
             _list.ItemsSource = result.Rooms;
+            _self = result.Self;
             _empty.Text = Words.Get(lang, "empty");
             _empty.Visibility = result.Rooms.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
             _join.IsEnabled = false;
@@ -370,7 +374,7 @@ namespace Hd2Qd.LobbyBrowser
             try
             {
                 SetStatus(Words.F(_lang, "joining", room.PlanetText + " · " + room.DifficultyText));
-                Process.Start(new ProcessStartInfo { FileName = Steam.JoinUrl(room.Lobby, room.HostId), UseShellExecute = true });
+                Process.Start(new ProcessStartInfo { FileName = JoinLink.Url(room.Lobby, room.HostId, _self), UseShellExecute = true });
             }
             catch (Exception e)
             {

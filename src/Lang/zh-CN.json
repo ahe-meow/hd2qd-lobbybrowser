@@ -47,5 +47,6 @@
   "err_steam": "Steam 不可用：{0}",
   "steam_missing": "找不到 steam_api64.dll：请确认已安装《绝地潜兵2》，或用环境变量 HD2_STEAM_API 指定其路径。",
   "steam_init": "Steam 初始化失败（{0}）。请确认 Steam 客户端已启动并已登录。",
+  "helper_failed": "扫描程序没有返回结果：{0}",
   "cmd_lobbies": "列出《绝地潜兵2》的公开大厅"
 }

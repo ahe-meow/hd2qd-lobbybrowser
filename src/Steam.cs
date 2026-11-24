@@ -71,6 +71,16 @@ namespace Hd2Qd.LobbyBrowser
             }
         }
 
+        /// <summary>SteamAPI_Shutdown, and a moment for the pump thread to call it: a process the
+        /// Steam client still holds would be one it may end with the game.</summary>
+        internal static void Stop()
+        {
+            var steam = _instance;
+            if (steam == null) return;
+            steam.Dispose();
+            Thread.Sleep(250);
+        }
+
         readonly ManualResetEventSlim _started = new ManualResetEventSlim();
         Thread _pump;
         volatile bool _stop;
@@ -318,7 +328,12 @@ namespace Hd2Qd.LobbyBrowser
                 var age = now - at;
                 if (age >= 0 && age <= 172800) room.Age = age;
             }
-            room.HostId = Data(lobby, "3");
+            // key 3 is the host's Steam ID only while the lobby is not crossplay: with crossplay
+            // off it is a PlayFab entity id, which a join URL cannot name (JoinLink.Url falls back
+            // to the player's own id then)
+            var crossplay = Data(lobby, "20");
+            var host = Data(lobby, "3");
+            room.HostId = crossplay == "0" ? "" : JoinLink.IsSteamId(host) ? host : "";
             return room;
         }
 
@@ -342,17 +357,6 @@ namespace Hd2Qd.LobbyBrowser
                 }
                 catch { }
             }
-        }
-
-        internal static string JoinUrl(ulong lobby, string host)
-        {
-            var who = host;
-            if (string.IsNullOrEmpty(who))
-            {
-                var steam = _instance;
-                who = steam != null ? steam.SelfId.ToString() : "0";
-            }
-            return "steam://joinlobby/" + AppId + "/" + lobby + "/" + who;
         }
 
         public void Dispose()

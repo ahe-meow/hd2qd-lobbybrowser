@@ -33,7 +33,24 @@ be read, the scan falls back to one worldwide list.
 2. In HD2 Mod Quick Deploy: **Plugins** page (the jigsaw piece beside the gear) → **Add plugin…**,
    or `hd2qd plugin-add <file>`.
 3. Needs manager 0.15.0 or later (plugin Api 2), the Steam client signed in, and Helldivers 2
-   installed — the plugin loads the game's own `steam_api64.dll` to talk to the Steam client.
+   installed — the plugin's helper program loads the game's own `steam_api64.dll` to talk to the
+   Steam client (never the manager: see below).
+
+## Why the scan runs in another process
+
+Steam treats every process that initialises Steamworks for an App ID as part of that game: it
+lists the app as running, and its **Stop** (in the library, or the close inside the game) ends
+the processes it knows. HD2LobbyBrowser, which initialised Steamworks itself, was ended with the
+game for that reason.
+
+A plugin lives in the manager's process, so the same call would put HD2 Mod Quick Deploy itself
+on that list — closing the game would close the manager, its deploy and this window.
+
+So the manager never touches Steamworks. The DLL carries a small program of its own,
+`HD2QD.LobbyBrowser.Helper.exe` (64-bit, .NET Framework, embedded in the DLL), writes it to the
+manager's settings folder on first use and starts it for each scan. It is the helper that Steam
+knows as Helldivers 2, and it lives for one scan: at worst, a Stop ends a scan, and the next
+Refresh starts another.
 
 ## What it reads, what it writes, what it contacts
 
@@ -41,7 +58,9 @@ be read, the scan falls back to one worldwide list.
   `steam_api64.dll` in the game's `bin` folder — or the path in the `HD2_STEAM_API` environment
   variable. Then Steam's public lobby list and lobby data through that DLL. Not the game, not its
   memory, not its files.
-- **Writes:** nothing. No settings file, no cache, no log.
+- **Writes:** one file, `HD2QD.LobbyBrowser.Helper.<version>.exe`, under the manager's settings
+  folder (`%USERPROFILE%\.hd2-mod-cli\lobbybrowser`), written from the DLL's own resource and
+  replaced when the plugin updates. No settings, no cache, no log.
 - **Contacts:** the Steam client on this PC (local), and `https://api.helldivers2.dev/api/v1/planets`
   for the active planet list (two identifying headers, as that API asks).
 
@@ -93,15 +112,31 @@ it. `tests\Verify.exe <dll>` checks it against the plugin contract of
 1. 自行构建（见下），或从 release 取 `HD2QD.LobbyBrowser.dll`。
 2. 在 HD2 Mod Quick Deploy 的**插件**页（齿轮旁的拼图按钮）点“添加插件…”，或
    `hd2qd plugin-add <文件>`。
-3. 需要管理器 0.15.0 以上（插件 Api 2）、Steam 客户端已登录、已安装《绝地潜兵2》——插件加载
-   游戏自带的 `steam_api64.dll` 与 Steam 客户端通信。
+3. 需要管理器 0.15.0 以上（插件 Api 2）、Steam 客户端已登录、已安装《绝地潜兵2》——由插件的
+   助手程序加载游戏自带的 `steam_api64.dll` 与 Steam 客户端通信（管理器本身不加载，见下）。
+
+## 为什么扫描放在另一个进程里
+
+Steam 会把**任何**为某个 App ID 初始化 Steamworks 的进程当作该游戏的一部分：库里显示“运行中”，
+点“停止”（或游戏内关闭）时，它认识的那些进程会被一起结束。HD2LobbyBrowser 自己初始化了
+Steamworks，所以关游戏时它也被关掉了。
+
+插件运行在管理器的进程里，同样的调用会把 **HD2 Mod Quick Deploy 自己**写进那份名单——于是关游戏
+就连带关掉管理器、正在进行的部署和这个窗口。
+
+所以管理器不碰 Steamworks：DLL 里带着一个自己的小程序 `HD2QD.LobbyBrowser.Helper.exe`
+（64 位 .NET Framework，作为资源嵌在 DLL 内），首次使用时写到管理器的设置目录，每次扫描启动一次。
+被 Steam 认作《绝地潜兵2》的是这个助手，它只活一次扫描：最坏情况是点“停止”时这次扫描被结束，
+再点刷新就重来。
 
 ## 读写与联网
 
 - **读**：`HKCU\Software\Valve\Steam`（`SteamPath`）与 `libraryfolders.vdf`，只为找到游戏
   `bin` 目录里的 `steam_api64.dll`（也可用环境变量 `HD2_STEAM_API` 指定）。随后通过该 DLL 读取
   Steam 的公开大厅列表与大厅数据。不读游戏进程、不读内存、不改游戏文件。
-- **写**：无。不写配置、不写缓存、不写日志。
+- **写**：一个文件 `HD2QD.LobbyBrowser.Helper.<版本>.exe`，写在管理器设置目录
+  （`%USERPROFILE%\.hd2-mod-cli\lobbybrowser`）下，来自 DLL 内嵌资源，插件升级时替换。
+  不写配置、不写缓存、不写日志。
 - **联网**：本机 Steam 客户端（本地），以及 `https://api.helldivers2.dev/api/v1/planets`
   （按其要求带两个标识头）。
 

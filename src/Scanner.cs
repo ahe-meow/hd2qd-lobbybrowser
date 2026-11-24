@@ -9,75 +9,6 @@ using System.Web.Script.Serialization;
 
 namespace Hd2Qd.LobbyBrowser
 {
-    /// <summary>One public lobby, read from Steam's lobby data (the keys HD2LobbyBrowser reads:
-    /// 12 planet, 17 difficulty, 21 region, 19 privacy, 10 mission packet, 8 SOS, 18 created,
-    /// 3 host, 16 front).</summary>
-    internal sealed class Room
-    {
-        internal ulong Lobby;
-        internal string HostId = "";
-        internal int Planet = -1;
-        internal int Difficulty;
-        internal int Members;
-        internal int Limit;
-        internal int Privacy = -1;
-        internal bool Session;
-        internal bool Sos;
-        internal bool DifficultyGuess;
-        internal string Front;
-        internal string Region;
-        internal string MissionHash;
-        internal string Mission;
-        internal string Host = "";
-        internal long Age = -1;
-
-        // what the grid shows, fixed in the manager's language when the scan ran
-        public string PlanetText { get; set; }
-        public string FrontText { get; set; }
-        public string DifficultyText { get; set; }
-        public string MembersText { get; set; }
-        public string MissionText { get; set; }
-        public string RegionText { get; set; }
-        public string HostText { get; set; }
-        public string AgeText { get; set; }
-        public string SosText { get; set; }
-        public string JoinText { get; set; }
-
-        internal void Dress(string lang)
-        {
-            PlanetText = Planet > 0 ? Tables.Planet(Planet, lang) : Words.Get(lang, "no_planet");
-            FrontText = Tables.FrontName(Front, lang);
-            DifficultyText = Difficulty > 0 ? Words.F(lang, "diff_n", Difficulty) : "—";
-            MembersText = Members + "/" + (Limit > 0 ? Limit : 4);
-            RegionText = string.IsNullOrEmpty(Region) ? Words.Get(lang, "no_host") : Tables.RegionName(Region, lang);
-            HostText = Host != "" ? Host : Words.Get(lang, "no_host");
-            SosText = Sos ? "SOS" : "";
-            JoinText = Words.Get(lang, "join");
-            if (Age < 0) AgeText = "";
-            else if (Age < 60) AgeText = Words.Get(lang, "age_new");
-            else if (Age < 3600) AgeText = Words.F(lang, "age_s", Age / 60);
-            else if (Age < 86400) AgeText = Words.F(lang, "age_m", Age / 3600);
-            else AgeText = Words.F(lang, "age_h", Age / 86400);
-        }
-    }
-
-    internal sealed class Filters
-    {
-        internal List<string> Fronts = new List<string>();
-        internal int Difficulty;                        // 0: any
-        internal bool PublicOnly = true;
-        internal bool HideNoSession = true;
-        internal bool HideFull;
-        internal bool SosOnly;
-    }
-
-    internal sealed class ScanResult
-    {
-        internal List<Room> Rooms = new List<Room>();
-        internal int Planets;
-        internal string Error;
-    }
-
     /// <summary>The scan of HD2LobbyBrowser: Steam's lobby list is asked once per active planet
     /// (50 lobbies an answer at most, so a full planet is split by difficulty), the results are
     /// filtered locally, and the host names are asked for.</summary>
@@ -101,6 +32,7 @@ namespace Hd2Qd.LobbyBrowser
                 return result;
             }
 
+            result.Self = steam.SelfId.ToString(CultureInfo.InvariantCulture);
             var targets = Live.Pick(filters.Fronts, filters.Difficulty);
             if (targets.Count == 0) targets.Add(0);      // no planet filter: one worldwide answer
             targets = targets.Take(MaxQueries).ToList();

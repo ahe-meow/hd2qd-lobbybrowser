@@ -30,6 +30,58 @@ namespace Hd2Qd.Verify
             if (!ok) _failed++;
         }
 
+        /// <summary>Starts the extracted helper the way the plugin does and prints what comes
+        /// back, raw: a line's bytes, the exit code, stderr. For when a scan answers nothing.
+        /// Usage: Verify.exe &lt;dll&gt; --helper &lt;path to the helper exe&gt;</summary>
+        static int ProbeHelper(string dll, string exe)
+        {
+            Console.WriteLine("helper: " + exe);
+            var request = "{\"lang\":\"zh-CN\",\"filters\":{\"fronts\":[],\"difficulty\":0,\"publicOnly\":true,\"hideNoSession\":true,\"hideFull\":false,\"sosOnly\":false}}";
+            var info = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = exe, WorkingDirectory = Path.GetDirectoryName(exe), UseShellExecute = false, CreateNoWindow = true,
+                RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true,
+                StandardOutputEncoding = System.Text.Encoding.UTF8, StandardErrorEncoding = System.Text.Encoding.UTF8,
+            };
+            using (var process = System.Diagnostics.Process.Start(info))
+            {
+                process.ErrorDataReceived += (s, e) => { if (e.Data != null) Console.WriteLine("      err: " + e.Data); };
+                process.BeginErrorReadLine();
+                process.StandardInput.Write(request);
+                process.StandardInput.Close();
+                string line;
+                var n = 0;
+                string last = null;
+                while ((line = process.StandardOutput.ReadLine()) != null)
+                {
+                    last = line;
+                    Console.WriteLine("      out[" + n++ + "] len=" + line.Length + " " + line.Substring(0, Math.Min(80, line.Length)));
+                }
+                process.WaitForExit(150000);
+                Console.WriteLine("      lines=" + n + " exit=" + process.ExitCode);
+                try
+                {
+                    var json = new System.Web.Script.Serialization.JavaScriptSerializer { MaxJsonLength = int.MaxValue };
+                    var message = json.Deserialize<Dictionary<string, object>>(last);
+                    var rooms = message.TryGetValue("rooms", out var r) ? (r as System.Collections.IList)?.Count ?? -1 : -1;
+                    Console.WriteLine("      parsed: rooms=" + rooms + " keys=" + string.Join(",", message.Keys));
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine("      parse failed: " + e.GetBaseException().Message);
+                }
+            }
+            return 0;
+        }
+
+        /// <summary>A settings folder of the test's own: the manager's own is not written to.</summary>
+        static string Home()
+        {
+            var home = Path.Combine(Path.GetTempPath(), "hd2qd-lobbybrowser-verify");
+            Directory.CreateDirectory(home);
+            return home;
+        }
+
         [STAThread]
         static int Main(string[] args)
         {
@@ -37,6 +89,7 @@ namespace Hd2Qd.Verify
             var offline = args.Contains("--offline");
             if (args.Contains("--window")) return ShowWindow(path);
             if (args.Contains("--api")) return CheckApi(path);
+            if (args.Contains("--helper")) return ProbeHelper(path, args[args.Length - 1]);
             Console.WriteLine("Plugin: " + path);
             if (!File.Exists(path)) { Console.WriteLine("FAIL  file not found"); return 2; }
 
@@ -85,7 +138,7 @@ namespace Hd2Qd.Verify
             // ---- a live scan through the plugin's own command ----
             if (!offline)
             {
-                var host = new Dictionary<string, object> { ["lang"] = "zh-CN", ["api"] = 2L };
+                var host = new Dictionary<string, object> { ["lang"] = "zh-CN", ["api"] = 2L, ["home"] = Home() };
                 var output = new StringWriter();
                 var code = (int)run.Invoke(null, new object[] { "lobbies", new string[0], output, host });
                 var text = output.ToString();
@@ -167,6 +220,7 @@ namespace Hd2Qd.Verify
             {
                 ["api"] = 2L,
                 ["lang"] = "zh-CN",
+                ["home"] = Home(),
                 ["window"] = new Func<string, FrameworkElement, Window>((title, content) =>
                 {
                     // the manager's ChromeWindow, as near as a test needs it: Ground900 ground,
