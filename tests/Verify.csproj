@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- Verify.exe: checks the built HD2QD.LobbyBrowswer.dll against the plugin contract of
+  <!-- Verify.exe: checks the built HD2QD.LobbyBrowser.dll against the plugin contract of
        HD2 Mod Quick Deploy (docs/plugin-authors.md) and runs one live scan through it.
        It loads the DLL as the manager would, by reflection: it links none of its sources. -->
   <PropertyGroup>

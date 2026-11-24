@@ -7,7 +7,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using Microsoft.Win32;
 
-namespace Hd2Qd.LobbyBrowswer
+namespace Hd2Qd.LobbyBrowser
 {
     /// <summary>The Steam client's own matchmaking, through the game's steam_api64.dll and the
     /// flat interface of the Steamworks SDK (the same calls HD2LobbyBrowser makes with ctypes).
@@ -100,7 +100,7 @@ namespace Hd2Qd.LobbyBrowswer
 
         void Start()
         {
-            _pump = new Thread(Pump) { IsBackground = true, Name = "HD2QD.LobbyBrowswer.Steam" };
+            _pump = new Thread(Pump) { IsBackground = true, Name = "HD2QD.LobbyBrowser.Steam" };
             _pump.Start();
             if (!_started.Wait(TimeSpan.FromSeconds(30)))
                 Error = "Steam did not answer within 30 seconds.";

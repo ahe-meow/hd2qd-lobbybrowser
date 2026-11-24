@@ -19,7 +19,7 @@ be read, the scan falls back to one worldwide list.
 
 ## Install
 
-1. Build it (below) or take `HD2QD.LobbyBrowswer.dll` from a release.
+1. Build it (below) or take `HD2QD.LobbyBrowser.dll` from a release.
 2. In HD2 Mod Quick Deploy: **Plugins** page (the jigsaw piece beside the gear) → **Add plugin…**,
    or `hd2qd plugin-add <file>`.
 3. Needs manager 0.15.0 or later (plugin Api 2), the Steam client signed in, and Helldivers 2
@@ -44,10 +44,10 @@ plugin updates with the manager and the DLL.
 ## Build
 
 ```
-build.bat            :: or: dotnet build src\HD2QD.LobbyBrowswer.csproj -c Release
+build.bat            :: or: dotnet build src\HD2QD.LobbyBrowser.csproj -c Release
 ```
 
-`release\HD2QD.LobbyBrowswer.dll` is the plugin: one file, .NET Framework 4.8, no other file beside
+`release\HD2QD.LobbyBrowser.dll` is the plugin: one file, .NET Framework 4.8, no other file beside
 it. `tests\Verify.exe <dll>` checks it against the plugin contract of
 [docs/plugin-authors.md](https://github.com/ahe-meow/hd2qd-plugins/blob/main/docs/plugin-authors.md);
 `--offline` skips the live scan, `--window` opens the window and writes `window.png`.
@@ -73,7 +73,7 @@ it. `tests\Verify.exe <dll>` checks it against the plugin contract of
 
 ## 安装
 
-1. 自行构建（见下），或从 release 取 `HD2QD.LobbyBrowswer.dll`。
+1. 自行构建（见下），或从 release 取 `HD2QD.LobbyBrowser.dll`。
 2. 在 HD2 Mod Quick Deploy 的**插件**页（齿轮旁的拼图按钮）点“添加插件…”，或
    `hd2qd plugin-add <文件>`。
 3. 需要管理器 0.15.0 以上（插件 Api 2）、Steam 客户端已登录、已安装《绝地潜兵2》——插件加载
@@ -96,10 +96,10 @@ it. `tests\Verify.exe <dll>` checks it against the plugin contract of
 ## 构建
 
 ```
-build.bat            :: 或：dotnet build src\HD2QD.LobbyBrowswer.csproj -c Release
+build.bat            :: 或：dotnet build src\HD2QD.LobbyBrowser.csproj -c Release
 ```
 
-`release\HD2QD.LobbyBrowswer.dll` 即插件：单文件、.NET Framework 4.8，旁边不需要任何其他文件。
+`release\HD2QD.LobbyBrowser.dll` 即插件：单文件、.NET Framework 4.8，旁边不需要任何其他文件。
 `tests\Verify.exe <dll>` 按
 [docs/plugin-authors.md](https://github.com/ahe-meow/hd2qd-plugins/blob/main/docs/plugin-authors.md)
 检查契约；`--offline` 跳过真实扫描，`--window` 打开窗口并写出 `window.png`。

@@ -7,7 +7,7 @@ using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Media;
 
-namespace Hd2Qd.LobbyBrowswer
+namespace Hd2Qd.LobbyBrowser
 {
     /// <summary>The plugin's window: the filters above, the lobbies in a grid, the state of the
     /// scan below. A scan runs off the UI thread; the grid is filled when it returns.</summary>

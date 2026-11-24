@@ -7,7 +7,7 @@ using System.Net;
 using System.Threading;
 using System.Web.Script.Serialization;
 
-namespace Hd2Qd.LobbyBrowswer
+namespace Hd2Qd.LobbyBrowser
 {
     /// <summary>One public lobby, read from Steam's lobby data (the keys HD2LobbyBrowser reads:
     /// 12 planet, 17 difficulty, 21 region, 19 privacy, 10 mission packet, 8 SOS, 18 created,

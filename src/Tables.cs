@@ -4,7 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Web.Script.Serialization;
 
-namespace Hd2Qd.LobbyBrowswer
+namespace Hd2Qd.LobbyBrowser
 {
     /// <summary>The game's names, from the tables of HD2LobbyBrowser (github.com/QLongYan/
     /// HD2LobbyBrowser, MIT), embedded as Data\&lt;name&gt;.json: planets, their Chinese names and

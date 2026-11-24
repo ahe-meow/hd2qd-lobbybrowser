@@ -33,7 +33,7 @@ namespace Hd2Qd.Verify
         [STAThread]
         static int Main(string[] args)
         {
-            var path = Path.GetFullPath(args.Length > 0 ? args[0] : "release/HD2QD.LobbyBrowswer.dll");
+            var path = Path.GetFullPath(args.Length > 0 ? args[0] : "release/HD2QD.LobbyBrowser.dll");
             var offline = args.Contains("--offline");
             if (args.Contains("--window")) return ShowWindow(path);
             if (args.Contains("--api")) return CheckApi(path);
@@ -125,7 +125,7 @@ namespace Hd2Qd.Verify
                 {
                     var text = reader.ReadToEnd();
                     Check("planet table answers", text.Length > 1000, text.Length + " bytes");
-                    var live = asmForApi.GetType("Hd2Qd.LobbyBrowswer.Live");
+                    var live = asmForApi.GetType("Hd2Qd.LobbyBrowser.Live");
                     var picks = (System.Collections.IEnumerable)live.GetMethod("Pick", BindingFlags.NonPublic | BindingFlags.Static)
                         .Invoke(null, new object[] { new List<string>(), 0 });
                     var list = picks.Cast<int>().ToList();
@@ -160,7 +160,7 @@ namespace Hd2Qd.Verify
         static int ShowWindow(string path)
         {
             var asm = Assembly.LoadFrom(path);
-            var plugin = asm.GetType("Hd2Qd.LobbyBrowswer.Plugin");
+            var plugin = asm.GetType("Hd2Qd.LobbyBrowser.Plugin");
             var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
             Window shown = null;
             var host = new Dictionary<string, object>

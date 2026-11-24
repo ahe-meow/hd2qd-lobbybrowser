@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Web.Script.Serialization;
 
-namespace Hd2Qd.LobbyBrowswer
+namespace Hd2Qd.LobbyBrowser
 {
     /// <summary>The plugin's text, one file per language: Lang\&lt;tag&gt;.json, a flat object of
     /// keys and texts, embedded in the DLL (the project file names each one Lang.&lt;tag&gt;.json).

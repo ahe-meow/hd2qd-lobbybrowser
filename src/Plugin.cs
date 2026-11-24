@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Windows;
 
-namespace Hd2Qd.LobbyBrowswer
+namespace Hd2Qd.LobbyBrowser
 {
     /// <summary>A plugin of HD2 Mod Quick Deploy: HD2LobbyBrowser's public lobby list as a window
     /// of the manager. The manager finds the one public class named Plugin in an HD2QD.*.dll and
