@@ -74,6 +74,50 @@ namespace Hd2Qd.Verify
             return 0;
         }
 
+        /// <summary>A preset written and read back: the file the window keeps its filters in.
+        /// Two of them, one with planets, a mission hash and a sort, so the Json round trip is
+        /// what is checked — not just that the type exists.</summary>
+        static void CheckPresets(Assembly asm)
+        {
+            try
+            {
+                var type = asm.GetType("Hd2Qd.LobbyBrowser.Preset");
+                var store = asm.GetType("Hd2Qd.LobbyBrowser.Presets");
+                if (type == null || store == null) { Check("presets round trip", false, "Preset/Presets missing"); return; }
+                var listType = typeof(List<>).MakeGenericType(type);
+                var list = (System.Collections.IList)Activator.CreateInstance(listType);
+
+                var one = Activator.CreateInstance(type, true);
+                type.GetField("Name", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(one, "深夜刷样本");
+                ((System.Collections.IList)type.GetField("Planets", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(one)).Add(92);
+                ((System.Collections.IList)type.GetField("Missions", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(one)).Add("1bc57256");
+                type.GetField("Difficulty", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(one, 7);
+                type.GetField("SortDesc", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(one, true);
+                list.Add(one);
+
+                var two = Activator.CreateInstance(type, true);
+                type.GetField("Name", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(two, "East only");
+                type.GetField("SosOnly", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(two, true);
+                list.Add(two);
+
+                var home = Path.Combine(Home(), "presets-" + Guid.NewGuid().ToString("N"));
+                var flags = BindingFlags.NonPublic | BindingFlags.Static;
+                var saved = store.GetMethod("Save", flags).Invoke(null, new object[] { home, list }) as string;
+                var back = store.GetMethod("Load", flags).Invoke(null, new object[] { home }) as System.Collections.IList;
+                var first = back != null && back.Count == 2 ? back[0] : null;
+                var name = first != null ? (string)type.GetField("Name", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(first) : null;
+                var difficulty = first != null ? (int)type.GetField("Difficulty", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(first) : -1;
+                var planets = first != null ? ((System.Collections.IList)type.GetField("Planets", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(first)).Count : -1;
+                var sos = back != null && back.Count == 2 ? (bool)type.GetField("SosOnly", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(back[1]) : false;
+                Check("presets round trip", saved == null && back != null && back.Count == 2 && name == "深夜刷样本"
+                    && difficulty == 7 && planets == 1 && sos, "saved=" + (saved ?? "ok") + " count=" + (back == null ? -1 : back.Count));
+            }
+            catch (Exception e)
+            {
+                Check("presets round trip", false, (e.InnerException ?? e).Message);
+            }
+        }
+
         /// <summary>A settings folder of the test's own: the manager's own is not written to.</summary>
         static string Home()
         {
@@ -134,6 +178,8 @@ namespace Hd2Qd.Verify
             var beside = Directory.GetFiles(Path.GetDirectoryName(path), "*.dll")
                 .Where(f => !Path.GetFileName(f).Equals(Path.GetFileName(path), StringComparison.OrdinalIgnoreCase)).ToArray();
             Check("no other file needed beside it", beside.Length == 0, string.Join(", ", beside.Select(Path.GetFileName)));
+
+            CheckPresets(asm);
 
             // ---- a live scan through the plugin's own command ----
             if (!offline)

@@ -17,12 +17,16 @@ age. Every column but SOS sorts: click its name, click again to turn it round.
 Filters: a **planet** picker (search, a front's chip takes all of its planets) makes the scan ask
 Steam for exactly those planets and nothing else; a **mission** filter narrows the results already
 in hand, so it costs no scan; difficulty, public only, no-session lobbies, full lobbies and SOS
-narrow them further.
+narrow them further. **Presets** keep a set of all of that under a name (planets, fronts,
+difficulty, the switches, the missions, the sort) and put it back with one click; they live in
+`presets.json` in the plugin's folder in the manager's settings.
 
 **Join** — bottom right, or a double-click, or Enter — opens
-`steam://joinlobby/553850/<lobby>/<host>`. If Helldivers 2 is not running, it starts the game from
-Steam first (`steam://rungameid/553850`), waits for its process, and only then sends the join: a
-join URL reaches a game that is up, not one that is still loading.
+`steam://joinlobby/553850/<lobby>/<host>` and nothing else. When the game is closed, Steam itself
+starts it with `+connect_lobby <lobby>` and the game joins as it boots; that is Valve's own
+invitation path (`+connect_lobby` is the argument Helldivers 2's launch options use). Starting the
+game first and joining afterwards does **not** work — the client then believes a game already runs
+and hands the lobby to the running-game callback, in a process whose Steamworks has not started.
 
 The ping column is this PC's latency to the **Steam relay of the lobby's region** (the closest of
 the region's nodes, `sdr_pops.json`, ICMP, five minutes of cache), the same measure the original
@@ -79,9 +83,9 @@ Steam's own banner.
   `steam_api64.dll` in the game's `bin` folder — or the path in the `HD2_STEAM_API` environment
   variable. Then Steam's public lobby list and lobby data through that DLL. Not the game, not its
   memory, not its files.
-- **Writes:** one file, `HD2QD.LobbyBrowser.Helper.<version>.exe`, under the manager's settings
-  folder (`%USERPROFILE%\.hd2-mod-cli\lobbybrowser`), written from the DLL's own resource and
-  replaced when the plugin updates. No settings, no cache, no log.
+- **Writes:** two files in `%USERPROFILE%\.hd2-mod-cli\lobbybrowser\`: `HD2QD.LobbyBrowser.Helper.<version>.exe`,
+  written from the DLL's own resource and replaced when the plugin updates, and `presets.json`, the
+  presets the player saved. No settings, no cache, no log.
 - **Contacts:** the Steam client on this PC (local), and `https://api.helldivers2.dev/api/v1/planets`
   for the active planet list (two identifying headers, as that API asks).
 
@@ -120,11 +124,14 @@ it. `tests\Verify.exe <dll>` checks it against the plugin contract of
 都可排序：点列名升序，再点一次反向。
 
 筛选：**星球**选择器（可搜索，战线 chip 一键全选该战线）让扫描只向 Steam 要这些星球；**任务**筛选只作用于
-已有结果、不重新扫描；难度、只看公开房、隐藏无会话房、隐藏满员、只看 SOS 继续收窄。
+已有结果、不重新扫描；难度、只看公开房、隐藏无会话房、隐藏满员、只看 SOS 继续收窄。**预设**把这些条件
+（星球、战线、难度、开关、任务、排序）连同名字存起来，一键套回；存在管理器设置目录下插件自己的文件夹里的
+`presets.json`。
 
-**加入**在右下角（也可双击行、回车）：打开 `steam://joinlobby/553850/<大厅>/<房主>`。若《绝地潜兵2》
-未运行，先用 `steam://rungameid/553850` 从 Steam 启动、等进程出现，再发加入请求——join 链接只对已启动的
-游戏有效，正在加载的游戏会丢掉它。
+**加入**在右下角（也可双击行、回车）：只做一件事——打开 `steam://joinlobby/553850/<大厅>/<房主>`。
+游戏没运行时，Steam 自己会用 `+connect_lobby <大厅>` 启动游戏，游戏启动过程中直接进房；这正是 Valve 文档里
+的邀请流程（`+connect_lobby` 也是社区用来跳过《绝地潜兵2》过场动画的启动参数）。**先启动游戏再发 join 是行不通的**：
+客户端会以为游戏已在运行，改走“运行中游戏回调”，而那个进程的 Steamworks 还没起来，请求就丢了。
 
 延迟是该区域 **Steam 中继**的延迟（该区域最优节点，`sdr_pops.json`，ICMP，缓存五分钟），与原项目同一算法；
 大厅从不公布自己的地址。延迟在管理器进程里与扫描并行测量，不占用 Steam 会话。

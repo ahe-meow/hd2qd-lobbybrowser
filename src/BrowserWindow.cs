@@ -61,7 +61,9 @@ namespace Hd2Qd.LobbyBrowser
         readonly Button _planetButton;
         readonly Button _difficulty;
         readonly Button _missionButton;
+        readonly Button _presetButton;
         readonly Button _join;
+        readonly Func<string, string, string, string> _askText;
         readonly HashSet<int> _planets = new HashSet<int>();
         readonly HashSet<string> _missions = new HashSet<string>();     // by mission hash
         List<Room> _rooms = new List<Room>();
@@ -79,6 +81,7 @@ namespace Hd2Qd.LobbyBrowser
             _lang = lang;
             _home = host != null && host.TryGetValue("home", out var home) ? home as string : null;
             _foot = host != null && host.TryGetValue("foot", out var foot) ? foot as Action<string, string> : null;
+            _askText = host != null && host.TryGetValue("ask_text", out var ask) ? ask as Func<string, string, string, string> : null;
 
             _refresh = Farm(Words.Get(lang, "refresh"), "Ghost");
             _refresh.ToolTip = Words.Get(lang, "refresh_tip");
@@ -90,6 +93,8 @@ namespace Hd2Qd.LobbyBrowser
             _difficulty.Click += (s, e) => PickDifficulty();
             _missionButton = Farm(Words.Get(lang, "filter_mission_all"), "Ghost");
             _missionButton.Click += (s, e) => PickMissions();
+            _presetButton = Farm(Words.Get(lang, "preset"), "Ghost");
+            _presetButton.Click += (s, e) => PickPresets();
 
             _join = new Button
             {
@@ -103,6 +108,7 @@ namespace Hd2Qd.LobbyBrowser
             bar.Children.Add(_planetButton);
             bar.Children.Add(_difficulty);
             bar.Children.Add(_missionButton);
+            bar.Children.Add(_presetButton);
             foreach (var front in new[] { "Terminids", "Automatons", "Illuminate" })
             {
                 var chip = new CheckBox
@@ -383,6 +389,121 @@ namespace Hd2Qd.LobbyBrowser
                 });
         }
 
+        /// <summary>The presets: the filters in hand saved under a name, and put back with one
+        /// click — planets, fronts, difficulty, the switches, the missions and the sort, as
+        /// HD2LobbyBrowser's preset holds them (that one keeps a single set; this keeps each name
+        /// the player gave). Kept in a file of the plugin's own in the manager's settings folder.</summary>
+        void PickPresets()
+        {
+            var presets = Presets.Load(_home);
+            var menu = new ContextMenu { PlacementTarget = _presetButton, Placement = PlacementMode.Bottom };
+            var save = new MenuItem { Header = Words.Get(_lang, "preset_save") };
+            save.Click += (s, e) => SavePreset(presets);
+            menu.Items.Add(save);
+            if (presets.Count > 0)
+            {
+                menu.Items.Add(new Separator());
+                foreach (var preset in presets)
+                {
+                    var apply = new MenuItem { Header = preset.Name };
+                    var chosen = preset;
+                    apply.Click += (s, e) => ApplyPreset(chosen);
+                    menu.Items.Add(apply);
+                }
+                menu.Items.Add(new Separator());
+                foreach (var preset in presets)
+                {
+                    var remove = new MenuItem { Header = Words.F(_lang, "preset_remove_one", preset.Name) };
+                    var name = preset.Name;
+                    remove.Click += (s, e) => RemovePreset(name);
+                    menu.Items.Add(remove);
+                }
+            }
+            menu.IsOpen = true;
+        }
+
+        /// <summary>The filters in hand, named: a name already in the list is replaced by what is
+        /// in hand now, which is how a preset is changed.</summary>
+        void SavePreset(List<Preset> presets)
+        {
+            var name = AskName(presets);
+            if (string.IsNullOrEmpty(name)) return;
+            var preset = CollectPreset(name);
+            var same = presets.FindIndex(p => string.Equals(p.Name, name, StringComparison.CurrentCultureIgnoreCase));
+            if (same >= 0) presets[same] = preset;
+            else presets.Add(preset);
+            var error = Presets.Save(_home, presets);
+            SetStatus(error == null ? Words.F(_lang, "preset_saved", name) : Words.F(_lang, "preset_failed", error));
+            UpdateFilterLabels();
+        }
+
+        /// <summary>The manager's own "type a line in" dialog when it is there (it hands one in
+        /// host["ask_text"]); otherwise the next free default name, so no click is lost.</summary>
+        string AskName(List<Preset> presets)
+        {
+            var start = Words.F(_lang, "preset_name_default", presets.Count + 1);
+            if (_askText != null)
+            {
+                try
+                {
+                    var typed = _askText(Words.Get(_lang, "preset_name"), Words.Get(_lang, "preset_save_action"), start);
+                    return typed == null ? null : typed.Trim();
+                }
+                catch
+                {
+                    // an older manager without the dialog: fall through to the default
+                }
+            }
+            var index = presets.Count + 1;
+            while (presets.Exists(p => string.Equals(p.Name, Words.F(_lang, "preset_name_default", index), StringComparison.CurrentCultureIgnoreCase)))
+                index++;
+            return Words.F(_lang, "preset_name_default", index);
+        }
+
+        Preset CollectPreset(string name) => new Preset
+        {
+            Name = name,
+            Planets = _planets.ToList(),
+            Fronts = _fronts.Where(box => box.IsChecked == true).Select(box => (string)box.Tag).ToList(),
+            Difficulty = _difficultyValue,
+            PublicOnly = _publicOnly.IsChecked == true,
+            HideNoSession = _hideNoSession.IsChecked == true,
+            HideFull = _hideFull.IsChecked == true,
+            SosOnly = _sosOnly.IsChecked == true,
+            Missions = _missions.ToList(),
+            Sort = (int)_sort,
+            SortDesc = _sortDesc,
+        };
+
+        void ApplyPreset(Preset preset)
+        {
+            _planets.Clear();
+            foreach (var planet in preset.Planets) _planets.Add(planet);
+            foreach (var box in _fronts) box.IsChecked = preset.Fronts.Contains((string)box.Tag);
+            _difficultyValue = preset.Difficulty;
+            _difficulty.Content = preset.Difficulty <= 0 ? Words.Get(_lang, "diff_any") : Words.F(_lang, "diff_n", preset.Difficulty);
+            _publicOnly.IsChecked = preset.PublicOnly;
+            _hideNoSession.IsChecked = preset.HideNoSession;
+            _hideFull.IsChecked = preset.HideFull;
+            _sosOnly.IsChecked = preset.SosOnly;
+            _missions.Clear();
+            foreach (var hash in preset.Missions) _missions.Add(hash);
+            _sort = (Sort)preset.Sort;
+            _sortDesc = preset.SortDesc;
+            BuildHeader();
+            UpdateFilterLabels();
+            SetStatus(Words.F(_lang, "preset_applied", preset.Name));
+            Refresh();
+        }
+
+        void RemovePreset(string name)
+        {
+            var presets = Presets.Load(_home);
+            presets.RemoveAll(p => string.Equals(p.Name, name, StringComparison.CurrentCultureIgnoreCase));
+            var error = Presets.Save(_home, presets);
+            SetStatus(error == null ? Words.F(_lang, "preset_removed", name) : Words.F(_lang, "preset_failed", error));
+        }
+
         void UpdateFilterLabels()
         {
             _planetButton.Content = _planets.Count == 0
@@ -539,10 +660,17 @@ namespace Hd2Qd.LobbyBrowser
             catch { return false; }
         }
 
-        /// <summary>Join, and if the game is not running, start it first and enter the lobby once
-        /// it is up: a join URL alone reaches a running game, and Steam will not hold one for a
-        /// game that is still loading.</summary>
-        async void Join()
+        /// <summary>Join: one steam://joinlobby, which Steam itself turns into a launch when the
+        /// game is closed — the client starts it with "+connect_lobby &lt;lobby&gt;" and the game
+        /// joins as it boots, the same mechanism its own launch options use (a lobby that does
+        /// not exist leaves the game at its menu, which is how players skip the intro).
+        ///
+        /// Starting the game first, as 1.3.0 did, makes Steam believe a game is already running:
+        /// it then hands the lobby to the running-game callback, in a process that has not started
+        /// its Steamworks yet, and the request is dropped. Valve's own note on the invitation flow
+        /// says it plainly — closed game: "+connect_lobby" on the command line; running game:
+        /// GameLobbyJoinRequested_t.</summary>
+        void Join()
         {
             var room = _list.SelectedItem as Room;
             if (room == null)
@@ -551,29 +679,32 @@ namespace Hd2Qd.LobbyBrowser
                 return;
             }
             var url = JoinLink.Url(room.Lobby, room.HostId, _self);
+            var where = room.PlanetText + " · " + room.DifficultyText;
             try
             {
-                if (!GameRunning())
-                {
-                    SetStatus(Words.Get(_lang, "launching"));
-                    Process.Start(new ProcessStartInfo { FileName = "steam://rungameid/" + JoinLink.AppId, UseShellExecute = true });
-                    var until = DateTime.UtcNow.AddSeconds(150);
-                    while (DateTime.UtcNow < until && !GameRunning()) await Task.Delay(1000);
-                    if (!GameRunning())
-                    {
-                        SetStatus(Words.Get(_lang, "launch_timeout"));
-                        return;
-                    }
-                    SetStatus(Words.Get(_lang, "game_started"));
-                    await Task.Delay(4000);                 // its window, then the lobby
-                }
-                SetStatus(Words.F(_lang, "join_sent", room.PlanetText + " · " + room.DifficultyText));
+                var running = GameRunning();
+                SetStatus(Words.F(_lang, running ? "join_sent" : "join_launching", where));
                 Process.Start(new ProcessStartInfo { FileName = url, UseShellExecute = true });
+                if (!running) WatchLaunch();
             }
             catch (Exception e)
             {
                 SetStatus(e.Message);
             }
+        }
+
+        /// <summary>Steam was asked to start the game and enter the lobby: say so if it never
+        /// appears (not installed, Steam offline, the client refused), rather than leaving the
+        /// sentence hanging.</summary>
+        async void WatchLaunch()
+        {
+            var until = DateTime.UtcNow.AddSeconds(30);
+            while (DateTime.UtcNow < until)
+            {
+                await Task.Delay(1000);
+                if (GameRunning()) return;
+            }
+            SetStatus(Words.Get(_lang, "launch_timeout"));
         }
     }
 }
