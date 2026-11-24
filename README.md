@@ -9,9 +9,19 @@ the lobby keys and the name tables are that program's, ported to a manager plugi
 
 ## What it shows
 
+![The lobby list, in the manager's own theme](docs/window.png)
+
 One row per public lobby: planet, front, difficulty, players, mission, region, SOS, host, age.
 Filter by front, difficulty, public only, no-session lobbies, full lobbies, SOS. **Join** (or a
-double-click) opens `steam://joinlobby/553850/<lobby>/<host>`, so the running game enters it.
+double-click, or Enter) opens `steam://joinlobby/553850/<lobby>/<host>`, so the running game
+enters it.
+
+The window is drawn in the manager's own theme and never in WPF's: the ground and card of
+`Ground900`/`Ground700`, `Ghost` and `Primary` buttons, `Chip` for the fronts, `Tick` for the
+switches, banded rows with the chosen one filled yellow, the thin dark scrollbar. The theme is
+taken from the running manager (`Application.Current.TryFindResource`); `Ui.xaml` holds the same
+styles with their colours written out, for when it is not the manager drawing — a test window, or
+an older manager.
 
 The scan asks Steam for one planet at a time — the planets the game reports as active, from
 `api.helldivers2.dev` — because Steam answers at most 50 lobbies per request. When that API cannot
@@ -64,9 +74,16 @@ it. `tests\Verify.exe <dll>` checks it against the plugin contract of
 
 ## 能做什么
 
+![管理器主题下的大厅列表](docs/window.png)
+
 每个公开大厅一行：星球、战线、难度、人数、任务、地区、SOS、房主、建立时间。可按战线、难度、
-只看公开房、隐藏无会话房、隐藏满员、只看 SOS 筛选。点 **加入**（或双击行）打开
+只看公开房、隐藏无会话房、隐藏满员、只看 SOS 筛选。点 **加入**（或双击行、回车）打开
 `steam://joinlobby/553850/<大厅>/<房主>`，正在运行的游戏随即进入该房间。
+
+窗口用的是管理器自己的主题，不是 WPF 默认控件：`Ground900`/`Ground700` 的底与卡片、`Ghost` 与
+`Primary` 按钮、`Chip` 战线、`Tick` 开关、隔行底色与选中行黄底、细窄深色滚动条。主题优先取运行中的
+管理器（`Application.Current.TryFindResource`）；`Ui.xaml` 是同一套样式写明颜色的副本，供非管理器
+绘制时使用（测试窗口、旧版管理器）。
 
 扫描逐个星球向 Steam 要列表（Steam 每次最多 50 条），星球取自 `api.helldivers2.dev` 报告的
 当前活跃星球；读不到该接口时退回一次全球列表。

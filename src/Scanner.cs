@@ -49,7 +49,7 @@ namespace Hd2Qd.LobbyBrowser
             FrontText = Tables.FrontName(Front, lang);
             DifficultyText = Difficulty > 0 ? Words.F(lang, "diff_n", Difficulty) : "—";
             MembersText = Members + "/" + (Limit > 0 ? Limit : 4);
-            RegionText = Tables.RegionName(Region, lang);
+            RegionText = string.IsNullOrEmpty(Region) ? Words.Get(lang, "no_host") : Tables.RegionName(Region, lang);
             HostText = Host != "" ? Host : Words.Get(lang, "no_host");
             SosText = Sos ? "SOS" : "";
             JoinText = Words.Get(lang, "join");

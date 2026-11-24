@@ -169,7 +169,31 @@ namespace Hd2Qd.Verify
                 ["lang"] = "zh-CN",
                 ["window"] = new Func<string, FrameworkElement, Window>((title, content) =>
                 {
-                    shown = new Window { Title = title, Width = 1280, Height = 760, Content = content };
+                    // the manager's ChromeWindow, as near as a test needs it: Ground900 ground,
+                    // a 48 px Ground700 caption, a grid line round both
+                    var ground = new SolidColorBrush(Color.FromRgb(0x0C, 0x0E, 0x11));
+                    var bar = new SolidColorBrush(Color.FromRgb(0x1A, 0x1D, 0x21));
+                    var grid = new SolidColorBrush(Color.FromRgb(0x30, 0x35, 0x3C));
+                    var ink = new SolidColorBrush(Color.FromRgb(0xF2, 0xEF, 0xE4));
+                    var head = new System.Windows.Controls.Border
+                    {
+                        Background = bar, BorderBrush = grid, BorderThickness = new Thickness(0, 0, 0, 1), Height = 48,
+                        Child = new System.Windows.Controls.TextBlock
+                        {
+                            Text = title, FontWeight = FontWeights.SemiBold, FontSize = 15,
+                            VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(16, 0, 0, 0), Foreground = ink,
+                        },
+                    };
+                    var dock = new System.Windows.Controls.DockPanel();
+                    System.Windows.Controls.DockPanel.SetDock(head, System.Windows.Controls.Dock.Top);
+                    dock.Children.Add(head);
+                    dock.Children.Add(content);
+                    shown = new Window
+                    {
+                        Title = title, Width = 1300, Height = 820, Background = ground, Foreground = ink,
+                        FontFamily = new FontFamily("Bahnschrift, Microsoft YaHei UI"), FontSize = 14,
+                        Content = new System.Windows.Controls.Border { BorderBrush = grid, BorderThickness = new Thickness(1), Child = dock },
+                    };
                     return shown;
                 }),
             };
@@ -190,15 +214,23 @@ namespace Hd2Qd.Verify
                 var content = shown.Content as FrameworkElement;
                 var width = (int)Math.Max(1, content.ActualWidth);
                 var height = (int)Math.Max(1, content.ActualHeight);
-                foreach (var block in Descendants(content).OfType<System.Windows.Controls.TextBlock>())
+                foreach (var block in Descendants(content).OfType<System.Windows.Controls.TextBlock>().Take(3))
                 {
                     var at = block.TranslatePoint(new Point(0, 0), content);
                     Console.WriteLine("      text at " + (int)at.X + "," + (int)at.Y + ": " + block.Text);
                 }
+                foreach (var list in Descendants(content).OfType<System.Windows.Controls.ListBox>())
+                {
+                    Console.WriteLine("      list width " + (int)list.ActualWidth + " of " + (int)content.ActualWidth);
+                    var item = list.ItemContainerGenerator.ContainerFromIndex(0) as FrameworkElement;
+                    if (item != null) Console.WriteLine("      row width " + (int)item.ActualWidth);
+                    if (list.SelectedIndex < 0 && list.Items.Count > 0) list.SelectedIndex = 0;   // the chosen row, as a player sees it
+                }
+                content.UpdateLayout();
                 var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
                 var ground = new DrawingVisual();
                 using (var dc = ground.RenderOpen())
-                    dc.DrawRectangle(Brushes.White, null, new Rect(0, 0, width, height));
+                    dc.DrawRectangle(new SolidColorBrush(Color.FromRgb(0x0C, 0x0E, 0x11)), null, new Rect(0, 0, width, height));
                 bitmap.Render(ground);
                 bitmap.Render(content);
                 var encoder = new PngBitmapEncoder();
