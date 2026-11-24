@@ -27,6 +27,15 @@ namespace Hd2Qd.LobbyBrowser
         internal string Host = "";
         internal long Age = -1;
 
+        /// <summary>A crossplay lobby names its host by PlayFab entity id (lobby key 3, decimal,
+        /// written here as 16 hexadecimal digits): the only way to ask PlayFab which platform the
+        /// host plays on (Platforms.cs).</summary>
+        internal string HostEntity = "";
+
+        /// <summary>"steam", "psn", "xbox", or empty when it is not known (a crossplay lobby
+        /// whose host PlayFab did not answer for).</summary>
+        internal string Platform = "";
+
         /// <summary>This PC's latency to the lobby's region's Steam relay, in ms; null when the
         /// region is unknown or did not answer.</summary>
         internal int? Ping;
@@ -42,6 +51,8 @@ namespace Hd2Qd.LobbyBrowser
         public string AgeText { get; set; }
         public string SosText { get; set; }
         public string PingText { get; set; }
+        public string PrivacyText { get; set; }
+        public string PlatformText { get; set; }
 
         /// <summary>The ping column's words: measured, or a dash when the region is unknown.</summary>
         internal void ShowPing() => PingText = Ping.HasValue ? Ping.Value + " ms" : "—";
@@ -57,6 +68,14 @@ namespace Hd2Qd.LobbyBrowser
                 : Session ? Words.Get(lang, "unknown_mission") : "";
             HostText = Host != "" ? Host : Words.Get(lang, "no_host");
             SosText = Sos ? "SOS" : "";
+            PrivacyText = Privacy == 0 ? Words.Get(lang, "priv_public")
+                : Privacy == 1 ? Words.Get(lang, "priv_friends")
+                : Privacy == 2 ? Words.Get(lang, "priv_private")
+                : "—";
+            PlatformText = Platform == "steam" ? Words.Get(lang, "plat_steam")
+                : Platform == "psn" ? Words.Get(lang, "plat_psn")
+                : Platform == "xbox" ? Words.Get(lang, "plat_xbox")
+                : "—";
             if (Age < 0) AgeText = "";
             else if (Age < 60) AgeText = Words.Get(lang, "age_new");
             else if (Age < 3600) AgeText = Words.F(lang, "age_s", Age / 60);
@@ -82,6 +101,8 @@ namespace Hd2Qd.LobbyBrowser
             ["mission"] = Mission ?? "",
             ["host"] = Host ?? "",
             ["age"] = Age,
+            ["hostEntity"] = HostEntity ?? "",
+            ["platform"] = Platform ?? "",
         };
 
         internal static Room FromJson(Dictionary<string, object> d)
@@ -105,6 +126,8 @@ namespace Hd2Qd.LobbyBrowser
             room.Mission = Text(d, "mission");
             room.Host = Text(d, "host");
             room.Age = Number(d, "age", -1);
+            room.HostEntity = Text(d, "hostEntity");
+            room.Platform = Text(d, "platform");
             room.Ping = null;                 // measured by the window, not carried by the scan
             return room;
         }

@@ -40,7 +40,12 @@ namespace Hd2Qd.LobbyBrowser
                 return result;
             }
 
-            var request = Json.Serialize(new Dictionary<string, object> { ["lang"] = lang, ["filters"] = filters.ToJson() });
+            var request = Json.Serialize(new Dictionary<string, object>
+            {
+                ["lang"] = lang,
+                ["home"] = home ?? "",
+                ["filters"] = filters.ToJson(),
+            });
             var errors = new StringBuilder();
             Process process = null;
             try

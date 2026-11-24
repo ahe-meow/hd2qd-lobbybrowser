@@ -48,7 +48,12 @@ namespace Hd2Qd.LobbyBrowser
         [return: MarshalAs(UnmanagedType.I1)] delegate bool RequestDataFn(IntPtr self, ulong lobby);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         [return: MarshalAs(UnmanagedType.I1)] delegate bool RequestInfoFn(IntPtr self, ulong steamId, [MarshalAs(UnmanagedType.I1)] bool nameOnly);
+        // GetAuthSessionTicket( void *pTicket, int cbMaxTicket, uint32 *pcbTicket,
+        //                       const SteamNetworkingIdentity *pIdentity ) — the identity is read
+        // by the callee, so it must be a real (null) argument, not left out
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        delegate uint TicketFn(IntPtr self, byte[] buffer, int max, out uint size, IntPtr identity);
+
         [return: MarshalAs(UnmanagedType.I1)] delegate bool CompletedFn(IntPtr self, ulong call, out byte failed);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         [return: MarshalAs(UnmanagedType.I1)] delegate bool ResultFn(IntPtr self, ulong call, IntPtr buffer, int size, int expected, out byte failed);
@@ -68,6 +73,29 @@ namespace Hd2Qd.LobbyBrowser
                 _instance = new Steam();
                 _instance.Start();
                 return _instance;
+            }
+        }
+
+        /// <summary>A Steam session ticket, as hexadecimal, or null: what PlayFab's
+        /// LoginWithSteam wants to read a host's public profile (Platforms.cs). Asked for while
+        /// the session is up — the ticket outlives SteamAPI_Shutdown, the interface does not.</summary>
+        internal static string Ticket()
+        {
+            var steam = _instance;
+            if (steam == null || !steam.Ok || steam._ticket == null) return null;
+            try
+            {
+                var buffer = new byte[4096];
+                uint size;
+                var handle = steam._ticket(steam._user, buffer, buffer.Length, out size, IntPtr.Zero);
+                if (handle == 0 || size == 0) return null;
+                var text = new System.Text.StringBuilder((int)size * 2);
+                for (var i = 0; i < size; i++) text.Append(buffer[i].ToString("X2"));
+                return text.ToString();
+            }
+            catch
+            {
+                return null;
             }
         }
 
@@ -98,6 +126,7 @@ namespace Hd2Qd.LobbyBrowser
         RequestDataFn _requestData;
         DataFn _getData;
         SteamIdFn _getSteamId;
+        TicketFn _ticket;
         PersonaFn _persona;
         RequestInfoFn _requestInfo;
         CompletedFn _completed;
@@ -176,6 +205,7 @@ namespace Hd2Qd.LobbyBrowser
             _requestData = Fn<RequestDataFn>("SteamAPI_ISteamMatchmaking_RequestLobbyData");
             _getData = Fn<DataFn>("SteamAPI_ISteamMatchmaking_GetLobbyData");
             _getSteamId = Fn<SteamIdFn>("SteamAPI_ISteamUser_GetSteamID");
+            _ticket = Fn<TicketFn>("SteamAPI_ISteamUser_GetAuthSessionTicket");
             _persona = Fn<PersonaFn>("SteamAPI_ISteamFriends_GetFriendPersonaName");
             _requestInfo = Fn<RequestInfoFn>("SteamAPI_ISteamFriends_RequestUserInformation");
             _completed = Fn<CompletedFn>("SteamAPI_ISteamUtils_IsAPICallCompleted");
@@ -334,10 +364,26 @@ namespace Hd2Qd.LobbyBrowser
             }
             // key 3 is the host's Steam ID only while the lobby is not crossplay: with crossplay
             // off it is a PlayFab entity id, which a join URL cannot name (JoinLink.Url falls back
-            // to the player's own id then)
+            // to the player's own id then) — but it is exactly what PlayFab wants to say which
+            // platform the host plays on (Platforms.cs)
             var crossplay = Data(lobby, "20");
             var host = Data(lobby, "3");
-            room.HostId = crossplay == "0" ? "" : JoinLink.IsSteamId(host) ? host : "";
+            if (crossplay == "1")
+            {
+                room.Platform = "steam";                  // crossplay off: a Steam lobby, no lookup needed
+                room.HostId = JoinLink.IsSteamId(host) ? host : "";
+            }
+            else if (crossplay == "0")
+            {
+                ulong entity;
+                if (ulong.TryParse(host, out entity) && host.Length >= 17)
+                    room.HostEntity = entity.ToString("X16");
+            }
+            else
+            {
+                room.HostId = JoinLink.IsSteamId(host) ? host : "";
+                if (room.HostId != "") room.Platform = "steam";
+            }
             return room;
         }
 

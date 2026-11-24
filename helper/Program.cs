@@ -25,6 +25,7 @@ namespace Hd2Qd.LobbyBrowser
             {
                 var request = Json.Deserialize<Dictionary<string, object>>(Console.In.ReadToEnd());
                 var lang = request != null && request.TryGetValue("lang", out var l) ? l as string : "en";
+                var home = request != null && request.TryGetValue("home", out var h) ? h as string : null;
                 var filters = request != null && request.TryGetValue("filters", out var f) && f is Dictionary<string, object> d
                     ? Filters.FromJson(d)
                     : new Filters();
@@ -33,6 +34,14 @@ namespace Hd2Qd.LobbyBrowser
                 Say(new Dictionary<string, object> { ["ready"] = 1 });
                 var result = Scanner.Scan(filters, lang, (done, total) =>
                     Console.Out.WriteLine("{\"progress\":[" + done + "," + total + "]}"));
+
+                // the host platforms come from PlayFab, which wants the Steam ticket: taken while
+                // the session is up; Steam is then closed and the lookups run on their own network
+                // time, so the seconds Steam counts the game as running stay what they were
+                var ticket = Steam.Ticket();
+                Steam.Stop();
+                Platforms.Enrich(result.Rooms, ticket, home);
+
                 Say(new Dictionary<string, object>
                 {
                     ["planets"] = result.Planets,

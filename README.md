@@ -33,6 +33,29 @@ the region's nodes, `sdr_pops.json`, ICMP, five minutes of cache), the same meas
 program uses — a lobby never publishes its own address. It is measured beside the scan, in the
 manager, so it opens no Steam session.
 
+The **platform** column is the original's PlayFab lookup: a crossplay lobby names its host by
+PlayFab entity id (lobby key 3), and that id's public profile object `testament_backing_platform`
+says 0 = PlayStation, 1 = Steam, 4 = Xbox (its `testament_platform_user_name` fills the host name).
+A lobby with crossplay off is Steam by definition and is never asked about. The lookups run in the
+helper **after** its Steam session has closed — the session ticket it needs is taken first, and the
+ticket outlives the session — for at most eight seconds a scan, with answers kept 30 minutes in
+`platforms.json`. The **privacy** column is the lobby's own key 19: public, friends, private.
+
+### The planet table, and its rate limit
+
+`api.helldivers2.dev` allows **5 requests per 10 seconds** and says so in every answer
+(`X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `Retry-After` on a 429). One scan needs exactly
+one request, and the plugin asks at most **once every five minutes**: the table is kept in
+`planets.json` and reused across refreshes and restarts, and a refresh inside that window reads no
+API at all. A 429 is obeyed to the second — `Retry-After`, or sixty seconds when it is not given —
+and the status bar says so, with the local time it answers again, instead of retrying into a
+longer ban:
+
+> 12 个星球上共 465 个房间。· 星球表被限流，约 07:51:27 后恢复；本次用上次读到的星球表。
+
+The table is read in the manager, not in the helper, so the scan itself makes no request but
+Steam's.
+
 The window is drawn in the manager's own theme and never in WPF's: the ground and card of
 `Ground900`/`Ground700`, `Ghost` and `Primary` buttons, `Chip` for the fronts, `Tick` for the
 switches, banded rows with the chosen one filled yellow, the thin dark scrollbar. The theme is
@@ -83,17 +106,20 @@ Steam's own banner.
   `steam_api64.dll` in the game's `bin` folder — or the path in the `HD2_STEAM_API` environment
   variable. Then Steam's public lobby list and lobby data through that DLL. Not the game, not its
   memory, not its files.
-- **Writes:** two files in `%USERPROFILE%\.hd2-mod-cli\lobbybrowser\`: `HD2QD.LobbyBrowser.Helper.<version>.exe`,
-  written from the DLL's own resource and replaced when the plugin updates, and `presets.json`, the
-  presets the player saved. No settings, no cache, no log.
-- **Contacts:** the Steam client on this PC (local), and `https://api.helldivers2.dev/api/v1/planets`
-  for the active planet list (two identifying headers, as that API asks).
+- **Writes:** all in `%USERPROFILE%\.hd2-mod-cli\lobbybrowser\`: `HD2QD.LobbyBrowser.Helper.<version>.exe`,
+  written from the DLL's own resource and replaced when the plugin updates; `presets.json`, the
+  presets the player saved; `planets.json`, the last planet table and any rate-limit cooldown;
+  `platforms.json`, the host platforms PlayFab named, with when it named them. No log.
+- **Contacts:** the Steam client on this PC (local); `https://api.helldivers2.dev/api/v1/planets`
+  for the planet table (once per five minutes, with the identifying headers that API asks for); and
+  PlayFab's `974a9` title (`https://974a9.playfabapi.com`) for host platforms, signed in with the
+  Steam ticket, one profile request a crossplay host.
 
 ## Not ported
 
-The host platform lookup (PlayFab; a lobby's platform is not read), the privacy column, presets,
-the global hotkey and the program's own updater: the manager runs the plugin, so the plugin
-updates with the manager and the DLL.
+Presets' single-slot behaviour (this keeps several, named), the lobby level column, the "unjoinable
+lobby" blacklist, the global hotkey and the program's own updater: the manager runs the plugin, so
+the plugin updates with the manager and the DLL.
 
 ## Build
 
@@ -136,13 +162,27 @@ it. `tests\Verify.exe <dll>` checks it against the plugin contract of
 延迟是该区域 **Steam 中继**的延迟（该区域最优节点，`sdr_pops.json`，ICMP，缓存五分钟），与原项目同一算法；
 大厅从不公布自己的地址。延迟在管理器进程里与扫描并行测量，不占用 Steam 会话。
 
+**平台**列用的是原项目的 PlayFab 查询：跨平台房间用 PlayFab 实体 id 标识房主（大厅键 3），该 id 的公开资料对象
+`testament_backing_platform` 给出 0=PlayStation、1=Steam、4=Xbox（`testament_platform_user_name` 顺带补上房主名）。
+关闭跨平台的房间本身就是 Steam 房，不做查询。查询在 helper **关闭 Steam 会话之后**进行（需要的 Steam 票据在关闭前
+取好，票据不会随会话失效），每次扫描最多八秒，答案在 `platforms.json` 里保留 30 分钟。**隐私**列是大厅自己的键 19：
+公开 / 好友 / 私密。
+
 窗口用的是管理器自己的主题，不是 WPF 默认控件：`Ground900`/`Ground700` 的底与卡片、`Ghost` 与
 `Primary` 按钮、`Chip` 战线、`Tick` 开关、隔行底色与选中行黄底、细窄深色滚动条。主题优先取运行中的
 管理器（`Application.Current.TryFindResource`）；`Ui.xaml` 是同一套样式写明颜色的副本，供非管理器
 绘制时使用（测试窗口、旧版管理器）。
 
-扫描逐个星球向 Steam 要列表（Steam 每次最多 50 条），星球取自 `api.helldivers2.dev` 报告的
-当前活跃星球；读不到该接口时退回一次全球列表。
+### 星球表与它的限流
+
+`api.helldivers2.dev` 限制 **每 10 秒 5 次**，并在每个响应里写明（`X-RateLimit-Limit`、`X-RateLimit-Remaining`，
+429 时给 `Retry-After`）。一次扫描只需要一次请求，插件最多**每五分钟**请求一次：星球表存在 `planets.json` 里，
+刷新与重启都复用，这五分钟内的刷新完全不碰接口。真的吃到 429 就按 `Retry-After`（没给就 60 秒）等满，
+状态栏写明本地恢复时间，而不是重试到更长的封禁：
+
+> 12 个星球上共 465 个房间。· 星球表被限流，约 07:51:27 后恢复；本次用上次读到的星球表。
+
+星球表在管理器里读、不在 helper 里读，所以扫描本身除 Steam 外不发任何请求。
 
 ## 安装
 
@@ -177,16 +217,17 @@ Steam 自己那串 breakpad 文本。
 - **读**：`HKCU\Software\Valve\Steam`（`SteamPath`）与 `libraryfolders.vdf`，只为找到游戏
   `bin` 目录里的 `steam_api64.dll`（也可用环境变量 `HD2_STEAM_API` 指定）。随后通过该 DLL 读取
   Steam 的公开大厅列表与大厅数据。不读游戏进程、不读内存、不改游戏文件。
-- **写**：一个文件 `HD2QD.LobbyBrowser.Helper.<版本>.exe`，写在管理器设置目录
-  （`%USERPROFILE%\.hd2-mod-cli\lobbybrowser`）下，来自 DLL 内嵌资源，插件升级时替换。
-  不写配置、不写缓存、不写日志。
-- **联网**：本机 Steam 客户端（本地），以及 `https://api.helldivers2.dev/api/v1/planets`
-  （按其要求带两个标识头）。
+- **写**：都在管理器设置目录 `%USERPROFILE%\.hd2-mod-cli\lobbybrowser` 下：`HD2QD.LobbyBrowser.Helper.<版本>.exe`
+  （来自 DLL 内嵌资源，升级时替换）、`presets.json`（玩家保存的预设）、`planets.json`（上次的星球表与限流冷却）、
+  `platforms.json`（PlayFab 给出的房主平台及时间）。不写日志。
+- **联网**：本机 Steam 客户端（本地）；`https://api.helldivers2.dev/api/v1/planets`（星球表，最多每五分钟一次，
+  带该接口要求的标识头）；以及 PlayFab 的 `974a9` 标题（`https://974a9.playfabapi.com`）查房主平台——用 Steam 票据
+  登录，每个跨平台房主一次资料请求。
 
 ## 未移植
 
-房主平台查询（PlayFab，房间平台不读）、隐私列、预设、全局热键、程序自身的更新器：插件由管理器
-加载，随管理器与 DLL 更新。
+预设的“只存一套”行为（这里存多套并各自命名）、大厅等级列、“进不去的房”黑名单、全局热键、程序自身的更新器：
+插件由管理器加载，随管理器与 DLL 更新。
 
 ## 构建
 

@@ -23,15 +23,12 @@ namespace Hd2Qd.LobbyBrowser
         internal static ScanResult Scan(Filters filters, string lang, Action<int, int> progress)
         {
             var result = new ScanResult();
-            // what planets to ask for needs the game's own table from the network, not Steam: it
-            // is read first, so the Steam session (the seconds Steam lists the game as running)
-            // covers the lobby requests alone
-            // planets the player named are asked for as they are; otherwise the active ones
-            var targets = filters.Planets.Count > 0
+            // the planets are named by the caller (the manager reads the game's own table, with
+            // its rate limit, before starting this): a scan makes no request but Steam's
+            var targets = filters.Planets != null && filters.Planets.Count > 0
                 ? filters.Planets.Distinct().Take(MaxQueries).ToList()
-                : Live.Pick(filters.Fronts, filters.Difficulty);
-            if (targets.Count == 0) targets.Add(0);      // no planet filter: one worldwide answer
-            targets = targets.Take(MaxQueries).ToList();
+                : new List<int>();
+            if (targets.Count == 0) targets.Add(0);      // no planet named: one worldwide answer
             result.Planets = targets.Count(p => p > 0);
 
             var steam = Steam.Get();
@@ -90,95 +87,5 @@ namespace Hd2Qd.LobbyBrowser
             if (f.Fronts.Count > 0 && (r.Front == null || !f.Fronts.Contains(r.Front))) return false;
             return true;
         }
-    }
-
-    /// <summary>The planets the game reports as active (api.helldivers2.dev, the public API the
-    /// game's community uses), so the scan spends its 20 requests on planets that have lobbies.</summary>
-    internal static class Live
-    {
-        const string Url = "https://api.helldivers2.dev/api/v1/planets";
-        static readonly object Gate = new object();
-        static Dictionary<int, int> _counts = new Dictionary<int, int>();
-        static Dictionary<int, string> _fronts = new Dictionary<int, string>();
-        static DateTime _at = DateTime.MinValue;
-        internal static string LastError;
-
-        internal static List<int> Pick(List<string> fronts, int difficulty)
-        {
-            Refresh();
-            var picks = new List<int>();
-            var lines = fronts != null && fronts.Count > 0 ? fronts : new List<string> { "Terminids", "Automatons", "Illuminate" };
-            var per = difficulty > 0 ? 5 : 4;
-            foreach (var front in lines)
-            {
-                var candidates = _counts
-                    .Where(kv => kv.Key > 0 && kv.Value > 0 && (_fronts.TryGetValue(kv.Key, out var f2) ? f2 : null) == front)
-                    .OrderByDescending(kv => kv.Value)
-                    .Select(kv => kv.Key)
-                    .Take(per);
-                picks.AddRange(candidates);
-            }
-            return picks.Take(20).ToList();
-        }
-
-        static void Refresh()
-        {
-            lock (Gate)
-            {
-                if ((DateTime.UtcNow - _at).TotalSeconds < 180) return;
-                try
-                {
-                    var request = (HttpWebRequest)WebRequest.Create(Url);
-                    request.Timeout = 8000;
-                    request.ReadWriteTimeout = 8000;
-                    request.UserAgent = "hd2qd-lobbybrowser";
-                    request.Headers["X-Super-Client"] = "hd2qd-lobbybrowser";
-                    request.Headers["X-Super-Contact"] = "local";
-                    string text;
-                    using (var response = request.GetResponse())
-                    using (var reader = new StreamReader(response.GetResponseStream()))
-                        text = reader.ReadToEnd();
-                    var counts = new Dictionary<int, int>();
-                    var fronts = new Dictionary<int, string>();
-                    foreach (var item in new JavaScriptSerializer { MaxJsonLength = int.MaxValue }.Deserialize<List<object>>(text))
-                    {
-                        var planet = item as Dictionary<string, object>;
-                        if (planet == null || !planet.ContainsKey("index")) continue;
-                        var index = Convert.ToInt32(planet["index"], CultureInfo.InvariantCulture);
-                        var stats = planet.TryGetValue("statistics", out var s) ? s as Dictionary<string, object> : null;
-                        counts[index] = stats != null && stats.TryGetValue("playerCount", out var c) && c != null
-                            ? (int)Math.Min(int.MaxValue, Convert.ToInt64(c, CultureInfo.InvariantCulture)) : 0;
-                        var owner = planet.TryGetValue("currentOwner", out var o) ? o as string : null;
-                        if (owner == "Terminid" || owner == "Terminids") fronts[index] = "Terminids";
-                        else if (owner == "Automaton" || owner == "Automatons") fronts[index] = "Automatons";
-                        else if (owner == "Illuminate") fronts[index] = "Illuminate";
-                        else if (stats != null)
-                        {
-                            var kills = new Dictionary<string, long>
-                            {
-                                ["Terminids"] = Value(stats, "terminidKills"),
-                                ["Automatons"] = Value(stats, "automatonKills"),
-                                ["Illuminate"] = Value(stats, "illuminateKills"),
-                            };
-                            var best = kills.OrderByDescending(kv => kv.Value).First();
-                            if (best.Value > 0) fronts[index] = best.Key;
-                        }
-                    }
-                    _counts = counts;
-                    _fronts = fronts;
-                    _at = DateTime.UtcNow;
-                }
-                catch (Exception e)
-                {
-                    // offline, or the API is down: the scan falls back to one worldwide request,
-                    // and the table is asked for again on the next refresh after a short wait
-                    LastError = e.GetBaseException().Message;
-                    _at = DateTime.UtcNow.AddSeconds(-135);
-                }
-            }
-        }
-
-        static long Value(Dictionary<string, object> stats, string key) =>
-            stats.TryGetValue(key, out var v) && v != null ? Convert.ToInt64(v, CultureInfo.InvariantCulture) : 0;
     }
 }

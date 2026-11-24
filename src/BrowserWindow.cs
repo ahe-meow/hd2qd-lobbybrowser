@@ -32,14 +32,14 @@ namespace Hd2Qd.LobbyBrowser
 
     internal sealed class LobbyPage
     {
-        enum Sort { Planet, Front, Diff, Members, Mission, Region, Ping, Host, Age }
+        enum Sort { Planet, Front, Diff, Members, Mission, Privacy, Platform, Region, Ping, Host, Age }
 
         // the table's columns, in the same stars in the header and in every row
-        static readonly double[] Columns = { 1.6, 1.05, 0.85, 0.65, 1.85, 0.75, 0.5, 0.65, 1.25, 0.65 };
-        static readonly string[] Heads = { "col_planet", "col_front", "col_diff", "col_members", "col_mission", "col_region", "col_sos", "col_ping", "col_host", "col_age" };
-        static readonly bool[] AlignRight = { false, false, false, true, false, false, false, true, false, true };
-        static readonly bool[] Numeric = { false, false, false, true, false, false, false, true, false, true };
-        static readonly Sort?[] SortOf = { Sort.Planet, Sort.Front, Sort.Diff, Sort.Members, Sort.Mission, Sort.Region, null, Sort.Ping, Sort.Host, Sort.Age };
+        static readonly double[] Columns = { 1.45, 0.85, 0.65, 0.5, 1.45, 0.55, 0.55, 0.6, 0.36, 0.5, 0.95, 0.5 };
+        static readonly string[] Heads = { "col_planet", "col_front", "col_diff", "col_members", "col_mission", "col_priv", "col_platform", "col_region", "col_sos", "col_ping", "col_host", "col_age" };
+        static readonly bool[] AlignRight = { false, false, false, true, false, false, false, false, false, true, false, true };
+        static readonly bool[] Numeric = { false, false, false, true, false, false, false, false, false, true, false, true };
+        static readonly Sort?[] SortOf = { Sort.Planet, Sort.Front, Sort.Diff, Sort.Members, Sort.Mission, Sort.Privacy, Sort.Platform, Sort.Region, null, Sort.Ping, Sort.Host, Sort.Age };
 
         readonly string _lang;
         readonly string _home;
@@ -283,6 +283,8 @@ namespace Hd2Qd.LobbyBrowser
                     new[] { "DifficultyText", "Normal", "" },
                     new[] { "MembersText", "Normal", "mono" },
                     new[] { "MissionText", "Normal", "" },
+                    new[] { "PrivacyText", "Normal", "" },
+                    new[] { "PlatformText", "Normal", "" },
                     new[] { "RegionText", "Normal", "" },
                     null,                                             // the SOS tag
                     new[] { "PingText", "Normal", "mono" },
@@ -536,6 +538,8 @@ namespace Hd2Qd.LobbyBrowser
                 case Sort.Diff: result = a.Difficulty.CompareTo(b.Difficulty); break;
                 case Sort.Members: result = a.Members.CompareTo(b.Members); break;
                 case Sort.Mission: result = string.Compare(a.MissionText, b.MissionText, StringComparison.CurrentCulture); break;
+                case Sort.Privacy: result = a.Privacy.CompareTo(b.Privacy); break;
+                case Sort.Platform: result = string.Compare(a.PlatformText, b.PlatformText, StringComparison.CurrentCulture); break;
                 case Sort.Region: result = string.Compare(a.RegionText, b.RegionText, StringComparison.CurrentCulture); break;
                 case Sort.Ping: result = (a.Ping ?? int.MaxValue).CompareTo(b.Ping ?? int.MaxValue); break;
                 case Sort.Host: result = string.Compare(a.HostText, b.HostText, StringComparison.CurrentCulture); break;
@@ -590,13 +594,27 @@ namespace Hd2Qd.LobbyBrowser
             SetStatus(Words.Get(_lang, "scanning"));
             var filters = Read();
             var lang = _lang;
+            var manual = _planets.Count > 0;
+            var fronts = filters.Fronts.ToList();
+            var difficulty = _difficultyValue;
             var dispatcher = Host != null ? Host.Dispatcher : Dispatcher.CurrentDispatcher;
-            Task.Run(() => Helper.Scan(_home, filters, lang, (done, total) =>
-                    dispatcher.BeginInvoke((Action)(() => SetStatus(Words.F(lang, "scanning_planets", total))))))
-                .ContinueWith(task => dispatcher.BeginInvoke((Action)(() => Finish(task, lang))));
+            Task.Run(() =>
+            {
+                string note = null;
+                if (!manual)
+                {
+                    // the game's planet table is read here, once per five minutes at most, and
+                    // never in the helper: a scan then asks the API for nothing at all
+                    var targets = Live.Pick(fronts, difficulty, _home, lang, out note);
+                    filters.Planets.AddRange(targets);
+                }
+                var result = Helper.Scan(_home, filters, lang, (done, total) =>
+                    dispatcher.BeginInvoke((Action)(() => SetStatus(Words.F(lang, "scanning_planets", total)))));
+                return Tuple.Create(result, note);
+            }).ContinueWith(task => dispatcher.BeginInvoke((Action)(() => Finish(task, lang))));
         }
 
-        void Finish(Task<ScanResult> task, string lang)
+        void Finish(Task<Tuple<ScanResult, string>> task, string lang)
         {
             _busy = false;
             _refresh.IsEnabled = true;
@@ -605,10 +623,11 @@ namespace Hd2Qd.LobbyBrowser
                 SetStatus(task.Exception != null ? task.Exception.GetBaseException().Message : "");
                 return;
             }
-            var result = task.Result;
+            var result = task.Result.Item1;
+            var note = task.Result.Item2;
             if (result.Error != null)
             {
-                SetStatus(result.Error);
+                SetStatus(note == null ? result.Error : result.Error + " · " + note);
                 _rooms = new List<Room>();
                 _list.ItemsSource = null;
                 _empty.Text = result.Error;
@@ -620,11 +639,12 @@ namespace Hd2Qd.LobbyBrowser
             _missions.RemoveWhere(hash => _rooms.All(r => (r.MissionHash ?? "") != hash));
             UpdateFilterLabels();
             ShowRows();
-            SetStatus(result.Rooms.Count == 0
+            var said = result.Rooms.Count == 0
                 ? Words.Get(lang, "empty")
                 : result.Planets == 0
                     ? Words.F(lang, "found_world", result.Rooms.Count)
-                    : Words.F(lang, "found", result.Rooms.Count, result.Planets));
+                    : Words.F(lang, "found", result.Rooms.Count, result.Planets);
+            SetStatus(note == null ? said : said + " · " + note);
             MeasurePings(lang);
         }
 

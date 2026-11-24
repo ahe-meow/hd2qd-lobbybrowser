@@ -16,7 +16,7 @@
     <Nullable>disable</Nullable>
     <AssemblyName>HD2QD.LobbyBrowser</AssemblyName>
     <RootNamespace>Hd2Qd.LobbyBrowser</RootNamespace>
-    <Version>1.4.0</Version>
+    <Version>1.5.0</Version>
     <Product>HD2QD Lobby Browser</Product>
     <Company>ahe-meow</Company>
     <Copyright>MIT License</Copyright>
@@ -30,10 +30,12 @@
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
   </ItemGroup>
 
-  <!-- Steam.cs, Scanner.cs and Lobby.cs's scan half are the helper's, not this assembly's -->
+  <!-- Steam.cs, Scanner.cs, Platforms.cs and Lobby.cs's scan half are the helper's, not this
+       assembly's -->
   <ItemGroup>
     <Compile Include="BrowserWindow.cs" />
     <Compile Include="Helper.cs" />
+    <Compile Include="Live.cs" />
     <Compile Include="Lobby.cs" />
     <Compile Include="Picker.cs" />
     <Compile Include="Ping.cs" />
