@@ -11,10 +11,23 @@ the lobby keys and the name tables are that program's, ported to a manager plugi
 
 ![The lobby list, in the manager's own theme](docs/window.png)
 
-One row per public lobby: planet, front, difficulty, players, mission, region, SOS, host, age.
-Filter by front, difficulty, public only, no-session lobbies, full lobbies, SOS. **Join** (or a
-double-click, or Enter) opens `steam://joinlobby/553850/<lobby>/<host>`, so the running game
-enters it.
+One row per public lobby: planet, front, difficulty, players, mission, region, SOS, **ping**, host,
+age. Every column but SOS sorts: click its name, click again to turn it round.
+
+Filters: a **planet** picker (search, a front's chip takes all of its planets) makes the scan ask
+Steam for exactly those planets and nothing else; a **mission** filter narrows the results already
+in hand, so it costs no scan; difficulty, public only, no-session lobbies, full lobbies and SOS
+narrow them further.
+
+**Join** — bottom right, or a double-click, or Enter — opens
+`steam://joinlobby/553850/<lobby>/<host>`. If Helldivers 2 is not running, it starts the game from
+Steam first (`steam://rungameid/553850`), waits for its process, and only then sends the join: a
+join URL reaches a game that is up, not one that is still loading.
+
+The ping column is this PC's latency to the **Steam relay of the lobby's region** (the closest of
+the region's nodes, `sdr_pops.json`, ICMP, five minutes of cache), the same measure the original
+program uses — a lobby never publishes its own address. It is measured beside the scan, in the
+manager, so it opens no Steam session.
 
 The window is drawn in the manager's own theme and never in WPF's: the ground and card of
 `Ground900`/`Ground700`, `Ghost` and `Primary` buttons, `Chip` for the fronts, `Tick` for the
@@ -74,9 +87,9 @@ Steam's own banner.
 
 ## Not ported
 
-The window's ping column, the host platform lookup (PlayFab), the mission multi-select panel,
-presets, the global hotkey and the program's own updater: the manager runs the plugin, so the
-plugin updates with the manager and the DLL.
+The host platform lookup (PlayFab; a lobby's platform is not read), the privacy column, presets,
+the global hotkey and the program's own updater: the manager runs the plugin, so the plugin
+updates with the manager and the DLL.
 
 ## Build
 
@@ -103,9 +116,18 @@ it. `tests\Verify.exe <dll>` checks it against the plugin contract of
 
 ![管理器主题下的大厅列表](docs/window.png)
 
-每个公开大厅一行：星球、战线、难度、人数、任务、地区、SOS、房主、建立时间。可按战线、难度、
-只看公开房、隐藏无会话房、隐藏满员、只看 SOS 筛选。点 **加入**（或双击行、回车）打开
-`steam://joinlobby/553850/<大厅>/<房主>`，正在运行的游戏随即进入该房间。
+每个公开大厅一行：星球、战线、难度、人数、任务、地区、SOS、**延迟**、房主、建立时间。除 SOS 外每一列
+都可排序：点列名升序，再点一次反向。
+
+筛选：**星球**选择器（可搜索，战线 chip 一键全选该战线）让扫描只向 Steam 要这些星球；**任务**筛选只作用于
+已有结果、不重新扫描；难度、只看公开房、隐藏无会话房、隐藏满员、只看 SOS 继续收窄。
+
+**加入**在右下角（也可双击行、回车）：打开 `steam://joinlobby/553850/<大厅>/<房主>`。若《绝地潜兵2》
+未运行，先用 `steam://rungameid/553850` 从 Steam 启动、等进程出现，再发加入请求——join 链接只对已启动的
+游戏有效，正在加载的游戏会丢掉它。
+
+延迟是该区域 **Steam 中继**的延迟（该区域最优节点，`sdr_pops.json`，ICMP，缓存五分钟），与原项目同一算法；
+大厅从不公布自己的地址。延迟在管理器进程里与扫描并行测量，不占用 Steam 会话。
 
 窗口用的是管理器自己的主题，不是 WPF 默认控件：`Ground900`/`Ground700` 的底与卡片、`Ghost` 与
 `Primary` 按钮、`Chip` 战线、`Tick` 开关、隔行底色与选中行黄底、细窄深色滚动条。主题优先取运行中的
@@ -156,7 +178,7 @@ Steam 自己那串 breakpad 文本。
 
 ## 未移植
 
-延迟列、房主平台查询（PlayFab）、任务多选面板、预设、全局热键、程序自身的更新器：插件由管理器
+房主平台查询（PlayFab，房间平台不读）、隐私列、预设、全局热键、程序自身的更新器：插件由管理器
 加载，随管理器与 DLL 更新。
 
 ## 构建

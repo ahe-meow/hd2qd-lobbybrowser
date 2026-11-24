@@ -27,6 +27,10 @@ namespace Hd2Qd.LobbyBrowser
         internal string Host = "";
         internal long Age = -1;
 
+        /// <summary>This PC's latency to the lobby's region's Steam relay, in ms; null when the
+        /// region is unknown or did not answer.</summary>
+        internal int? Ping;
+
         // what the list shows, fixed in the manager's language when the window draws them
         public string PlanetText { get; set; }
         public string FrontText { get; set; }
@@ -37,6 +41,10 @@ namespace Hd2Qd.LobbyBrowser
         public string HostText { get; set; }
         public string AgeText { get; set; }
         public string SosText { get; set; }
+        public string PingText { get; set; }
+
+        /// <summary>The ping column's words: measured, or a dash when the region is unknown.</summary>
+        internal void ShowPing() => PingText = Ping.HasValue ? Ping.Value + " ms" : "—";
 
         internal void Dress(string lang)
         {
@@ -97,6 +105,7 @@ namespace Hd2Qd.LobbyBrowser
             room.Mission = Text(d, "mission");
             room.Host = Text(d, "host");
             room.Age = Number(d, "age", -1);
+            room.Ping = null;                 // measured by the window, not carried by the scan
             return room;
         }
 
@@ -113,6 +122,7 @@ namespace Hd2Qd.LobbyBrowser
     internal sealed class Filters
     {
         internal List<string> Fronts = new List<string>();
+        internal List<int> Planets = new List<int>();    // empty: the scan picks the active planets
         internal int Difficulty;                        // 0: any
         internal bool PublicOnly = true;
         internal bool HideNoSession = true;
@@ -122,6 +132,7 @@ namespace Hd2Qd.LobbyBrowser
         internal Dictionary<string, object> ToJson() => new Dictionary<string, object>
         {
             ["fronts"] = new List<object>(Fronts),
+            ["planets"] = Planets.ConvertAll(p => (object)p),
             ["difficulty"] = Difficulty,
             ["publicOnly"] = PublicOnly,
             ["hideNoSession"] = HideNoSession,
@@ -135,6 +146,9 @@ namespace Hd2Qd.LobbyBrowser
             if (d.TryGetValue("fronts", out var fronts) && fronts is System.Collections.IList list)
                 foreach (var f in list)
                     if (f is string s && s != "") filters.Fronts.Add(s);
+            if (d.TryGetValue("planets", out var planets) && planets is System.Collections.IList picked)
+                foreach (var entry in picked)
+                    if (entry != null) filters.Planets.Add(Convert.ToInt32(entry, CultureInfo.InvariantCulture));
             if (d.TryGetValue("difficulty", out var diff) && diff != null) filters.Difficulty = Convert.ToInt32(diff, CultureInfo.InvariantCulture);
             if (d.TryGetValue("publicOnly", out var pub) && pub is bool p) filters.PublicOnly = p;
             if (d.TryGetValue("hideNoSession", out var hide) && hide is bool h) filters.HideNoSession = h;

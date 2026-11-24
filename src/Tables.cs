@@ -107,6 +107,43 @@ namespace Hd2Qd.LobbyBrowser
                 default: return region ?? "";
             }
         }
+
+        /// <summary>Every planet the game has, for the planet picker: named as the manager's
+        /// language names it, with its sector and front, biggest names last within a sector.</summary>
+        internal static List<PlanetRow> Planets(string lang)
+        {
+            var rows = new List<PlanetRow>();
+            foreach (var pair in PlanetName)
+            {
+                var name = Planet(pair.Key, lang);
+                if (string.IsNullOrEmpty(name)) continue;
+                rows.Add(new PlanetRow
+                {
+                    Index = pair.Key,
+                    Name = name,
+                    Sector = Sector(pair.Key, lang),
+                    Front = PlanetFront.TryGetValue(pair.Key, out var front) ? front : null,
+                });
+            }
+            var order = new Dictionary<string, int> { ["Terminids"] = 0, ["Automatons"] = 1, ["Illuminate"] = 2 };
+            rows.Sort((a, b) =>
+            {
+                var front = (a.Front == null ? 9 : order.TryGetValue(a.Front, out var x) ? x : 8)
+                    .CompareTo(b.Front == null ? 9 : order.TryGetValue(b.Front, out var y) ? y : 8);
+                if (front != 0) return front;
+                var sector = string.Compare(a.Sector, b.Sector, StringComparison.CurrentCulture);
+                return sector != 0 ? sector : string.Compare(a.Name, b.Name, StringComparison.CurrentCulture);
+            });
+            return rows;
+        }
+    }
+
+    internal sealed class PlanetRow
+    {
+        internal int Index;
+        internal string Name;
+        internal string Sector;
+        internal string Front;
     }
 
     /// <summary>A lobby's mission packet (lobby key 10), as HD2LobbyBrowser reads it: the front's

@@ -26,7 +26,10 @@ namespace Hd2Qd.LobbyBrowser
             // what planets to ask for needs the game's own table from the network, not Steam: it
             // is read first, so the Steam session (the seconds Steam lists the game as running)
             // covers the lobby requests alone
-            var targets = Live.Pick(filters.Fronts, filters.Difficulty);
+            // planets the player named are asked for as they are; otherwise the active ones
+            var targets = filters.Planets.Count > 0
+                ? filters.Planets.Distinct().Take(MaxQueries).ToList()
+                : Live.Pick(filters.Fronts, filters.Difficulty);
             if (targets.Count == 0) targets.Add(0);      // no planet filter: one worldwide answer
             targets = targets.Take(MaxQueries).ToList();
             result.Planets = targets.Count(p => p > 0);
