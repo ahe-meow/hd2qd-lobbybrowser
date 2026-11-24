@@ -1,0 +1,216 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Reflection;
+using System.Runtime.Versioning;
+using System.Windows;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using System.Windows.Threading;
+
+namespace Hd2Qd.Verify
+{
+    /// <summary>Checks a built plugin against the contract in docs/plugin-authors.md of
+    /// hd2qd-plugins, then runs one live scan through its own Run command. Usage:
+    /// Verify.exe &lt;HD2QD.*.dll&gt; [--offline]</summary>
+    static class Verify
+    {
+        static int _failed;
+        static readonly string[] Framework =
+        {
+            "mscorlib", "System", "System.Core", "System.Runtime", "System.Web.Extensions",
+            "PresentationCore", "PresentationFramework", "WindowsBase", "System.Xaml", "System.Xml",
+            "System.Drawing", "System.Data", "System.Configuration", "System.Net.Http", "System.Web",
+        };
+
+        static void Check(string what, bool ok, string detail = "")
+        {
+            Console.WriteLine((ok ? "PASS  " : "FAIL  ") + what + (detail != "" ? "  [" + detail + "]" : ""));
+            if (!ok) _failed++;
+        }
+
+        [STAThread]
+        static int Main(string[] args)
+        {
+            var path = Path.GetFullPath(args.Length > 0 ? args[0] : "release/HD2QD.LobbyBrowswer.dll");
+            var offline = args.Contains("--offline");
+            if (args.Contains("--window")) return ShowWindow(path);
+            if (args.Contains("--api")) return CheckApi(path);
+            Console.WriteLine("Plugin: " + path);
+            if (!File.Exists(path)) { Console.WriteLine("FAIL  file not found"); return 2; }
+
+            var asm = Assembly.LoadFrom(path);
+            var name = asm.GetName();
+
+            // ---- naming and target ----
+            Check("file name is HD2QD.<name>.dll", Path.GetFileName(path).StartsWith("HD2QD.") && path.EndsWith(".dll"));
+            Check("assembly name matches the file", name.Name + ".dll" == Path.GetFileName(path), name.Name);
+            var tfm = asm.GetCustomAttribute<TargetFrameworkAttribute>();
+            Check("target framework is .NET Framework 4.8", tfm != null && tfm.FrameworkName == ".NETFramework,Version=v4.8",
+                tfm != null ? tfm.FrameworkName : "none");
+
+            // ---- the contract's class ----
+            var exported = asm.GetExportedTypes();
+            Check("exactly one public type", exported.Length == 1, string.Join(", ", exported.Select(t => t.FullName)));
+            var plugin = exported.FirstOrDefault(t => t.Name == "Plugin");
+            Check("public class is named Plugin", plugin != null);
+            if (plugin == null) return 1;
+            Check("Plugin is static", plugin.IsAbstract && plugin.IsSealed);
+
+            var api = plugin.GetField("Api", BindingFlags.Public | BindingFlags.Static);
+            Check("Api is const int 2", api != null && api.IsLiteral && api.FieldType == typeof(int) && (int)api.GetRawConstantValue() == 2);
+            var kind = plugin.GetField("Kind", BindingFlags.Public | BindingFlags.Static);
+            Check("Kind is const \"window\"", kind != null && kind.IsLiteral && Equals(kind.GetRawConstantValue(), "window"));
+
+            Check("Title/Summary answer in en and zh-CN", Answers(plugin, "Title", "en", "zh-CN") && Answers(plugin, "Summary", "en", "zh-CN"));
+            var open = plugin.GetMethod("Open", BindingFlags.Public | BindingFlags.Static);
+            Check("Open(Window, Dictionary<string, object>)", open != null && open.ReturnType == typeof(void) &&
+                open.GetParameters().Select(p => p.ParameterType).SequenceEqual(new[] { typeof(Window), typeof(Dictionary<string, object>) }));
+            var run = plugin.GetMethod("Run", BindingFlags.Public | BindingFlags.Static);
+            Check("Run(command, args, output, host)", run != null && run.GetParameters().Length == 4);
+
+            // ---- what the plugin carries ----
+            var resources = asm.GetManifestResourceNames();
+            foreach (var r in new[] { "Lang.en.json", "Lang.zh-CN.json", "Data.planets.json", "Data.mission_names.json" })
+                Check("resource " + r, resources.Contains(r), string.Join(", ", resources));
+
+            // ---- dependencies: the framework and nothing else ----
+            var outside = asm.GetReferencedAssemblies().Select(a => a.Name).Where(n => !Framework.Contains(n)).ToArray();
+            Check("references the framework only", outside.Length == 0, string.Join(", ", outside));
+            var beside = Directory.GetFiles(Path.GetDirectoryName(path), "*.dll")
+                .Where(f => !Path.GetFileName(f).Equals(Path.GetFileName(path), StringComparison.OrdinalIgnoreCase)).ToArray();
+            Check("no other file needed beside it", beside.Length == 0, string.Join(", ", beside.Select(Path.GetFileName)));
+
+            // ---- a live scan through the plugin's own command ----
+            if (!offline)
+            {
+                var host = new Dictionary<string, object> { ["lang"] = "zh-CN", ["api"] = 2L };
+                var output = new StringWriter();
+                var code = (int)run.Invoke(null, new object[] { "lobbies", new string[0], output, host });
+                var text = output.ToString();
+                Check("lobbies command returns 0", code == 0, text.Split('\n').FirstOrDefault());
+                var rows = text.Split('\n').Count(l => l.Length > 0 && char.IsDigit(l[0]));
+                Check("lobbies command lists lobbies", rows > 1, rows + " rows");
+                Check("lobbies carry a planet and a difficulty", text.Contains("难度") || text.Contains("Difficulty"));
+                foreach (var line in text.Split('\n').Take(4)) Console.WriteLine("      " + line);
+            }
+
+            Console.WriteLine(_failed == 0 ? "OK: every check passed." : _failed + " check(s) failed.");
+            return _failed == 0 ? 0 : 1;
+        }
+
+        static bool Answers(Type plugin, string member, params string[] langs)
+        {
+            var method = plugin.GetMethod(member, BindingFlags.Public | BindingFlags.Static);
+            if (method == null) return false;
+            var texts = langs.Select(l => (string)method.Invoke(null, new object[] { l })).ToArray();
+            return texts.All(t => !string.IsNullOrWhiteSpace(t) && t != member) && texts.Distinct().Count() > 1;
+        }
+
+        /// <summary>The planet table the scan picks its targets from, asked the way the plugin
+        /// asks it: a plain HttpWebRequest with the API's two headers.</summary>
+        static int CheckApi(string path)
+        {
+            var asmForApi = Assembly.LoadFrom(path);
+            try
+            {
+                var request = (System.Net.HttpWebRequest)System.Net.WebRequest.Create("https://api.helldivers2.dev/api/v1/planets");
+                request.Timeout = 8000;
+                request.UserAgent = "hd2qd-lobbybrowser";
+                request.Headers["X-Super-Client"] = "hd2qd-lobbybrowser";
+                request.Headers["X-Super-Contact"] = "local";
+                using (var response = request.GetResponse())
+                using (var reader = new StreamReader(response.GetResponseStream()))
+                {
+                    var text = reader.ReadToEnd();
+                    Check("planet table answers", text.Length > 1000, text.Length + " bytes");
+                    var live = asmForApi.GetType("Hd2Qd.LobbyBrowswer.Live");
+                    var picks = (System.Collections.IEnumerable)live.GetMethod("Pick", BindingFlags.NonPublic | BindingFlags.Static)
+                        .Invoke(null, new object[] { new List<string>(), 0 });
+                    var list = picks.Cast<int>().ToList();
+                    var counts = (System.Collections.IDictionary)live.GetField("_counts", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
+                    Check("planet table is read", counts.Count > 100, counts.Count + " planets");
+                    Check("active planets chosen", list.Count > 5 && !list.Contains(0), string.Join(",", list));
+                    var error = live.GetField("LastError", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null) as string;
+                    if (!string.IsNullOrEmpty(error)) Console.WriteLine("      last error: " + error);
+                }
+            }
+            catch (Exception e)
+            {
+                Check("planet table answers", false, e.GetBaseException().Message);
+            }
+            return _failed == 0 ? 0 : 1;
+        }
+
+        static IEnumerable<DependencyObject> Descendants(DependencyObject parent)
+        {
+            var count = System.Windows.Media.VisualTreeHelper.GetChildrenCount(parent);
+            for (var i = 0; i < count; i++)
+            {
+                var child = System.Windows.Media.VisualTreeHelper.GetChild(parent, i);
+                yield return child;
+                foreach (var deeper in Descendants(child)) yield return deeper;
+            }
+        }
+
+        /// <summary>Opens the plugin's window with the manager's own host dictionary shape, lets
+        /// its scan run, and writes what a player sees to tests/window.png: the only check of the
+        /// drawing itself, which needs no manager.</summary>
+        static int ShowWindow(string path)
+        {
+            var asm = Assembly.LoadFrom(path);
+            var plugin = asm.GetType("Hd2Qd.LobbyBrowswer.Plugin");
+            var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+            Window shown = null;
+            var host = new Dictionary<string, object>
+            {
+                ["api"] = 2L,
+                ["lang"] = "zh-CN",
+                ["window"] = new Func<string, FrameworkElement, Window>((title, content) =>
+                {
+                    shown = new Window { Title = title, Width = 1280, Height = 760, Content = content };
+                    return shown;
+                }),
+            };
+            try
+            {
+                plugin.GetMethod("Open").Invoke(null, new object[] { null, host });
+                Console.WriteLine("PASS  Open() drew the window: " + shown.Title);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("FAIL  Open() threw: " + (e.InnerException ?? e).Message);
+                return 1;
+            }
+            var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
+            timer.Tick += (s, e) =>
+            {
+                timer.Stop();
+                var content = shown.Content as FrameworkElement;
+                var width = (int)Math.Max(1, content.ActualWidth);
+                var height = (int)Math.Max(1, content.ActualHeight);
+                foreach (var block in Descendants(content).OfType<System.Windows.Controls.TextBlock>())
+                {
+                    var at = block.TranslatePoint(new Point(0, 0), content);
+                    Console.WriteLine("      text at " + (int)at.X + "," + (int)at.Y + ": " + block.Text);
+                }
+                var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+                var ground = new DrawingVisual();
+                using (var dc = ground.RenderOpen())
+                    dc.DrawRectangle(Brushes.White, null, new Rect(0, 0, width, height));
+                bitmap.Render(ground);
+                bitmap.Render(content);
+                var encoder = new PngBitmapEncoder();
+                encoder.Frames.Add(BitmapFrame.Create(bitmap));
+                var file = Path.Combine(Directory.GetCurrentDirectory(), "window.png");
+                using (var stream = File.Create(file)) encoder.Save(stream);
+                Console.WriteLine("PASS  window rendered to " + file + " (" + width + "x" + height + ")");
+                app.Shutdown();
+            };
+            timer.Start();
+            app.Run();
+            return 0;
+        }
+    }
+}
