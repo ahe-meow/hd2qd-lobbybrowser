@@ -23,6 +23,14 @@ namespace Hd2Qd.LobbyBrowser
         internal static ScanResult Scan(Filters filters, string lang, Action<int, int> progress)
         {
             var result = new ScanResult();
+            // what planets to ask for needs the game's own table from the network, not Steam: it
+            // is read first, so the Steam session (the seconds Steam lists the game as running)
+            // covers the lobby requests alone
+            var targets = Live.Pick(filters.Fronts, filters.Difficulty);
+            if (targets.Count == 0) targets.Add(0);      // no planet filter: one worldwide answer
+            targets = targets.Take(MaxQueries).ToList();
+            result.Planets = targets.Count(p => p > 0);
+
             var steam = Steam.Get();
             if (steam == null || !steam.Ok)
             {
@@ -33,10 +41,6 @@ namespace Hd2Qd.LobbyBrowser
             }
 
             result.Self = steam.SelfId.ToString(CultureInfo.InvariantCulture);
-            var targets = Live.Pick(filters.Fronts, filters.Difficulty);
-            if (targets.Count == 0) targets.Add(0);      // no planet filter: one worldwide answer
-            targets = targets.Take(MaxQueries).ToList();
-            result.Planets = targets.Count(p => p > 0);
 
             var seen = new HashSet<ulong>();
             var ids = new List<ulong>();

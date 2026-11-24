@@ -2,6 +2,7 @@
   "title": "Lobby Browser",
   "summary": "Lists the public Helldivers 2 lobbies with their planet, front, difficulty, mission, region and players, and joins the one you pick.",
   "refresh": "Refresh",
+  "refresh_tip": "Each scan opens one short Steam session (the lobby list comes from Steamworks), so Steam shows the game as running for its few seconds, then stops.",
   "join": "Join",
   "public_only": "Public only",
   "hide_nosession": "Hide no-session",
@@ -49,5 +50,7 @@
   "steam_missing": "steam_api64.dll was not found — install Helldivers 2, or set the HD2_STEAM_API environment variable to its path.",
   "steam_init": "Steam could not start ({0}). Start and sign in to the Steam client first.",
   "helper_failed": "The scan program did not answer: {0}",
+  "helper_stopped": "Steam ended this scan — the library's Stop ends whatever counts as the game, and a scan is one. Refresh to look again.",
+  "helper_nothing": "The scan program gave no answer ({0}).",
   "cmd_lobbies": "print the public Helldivers 2 lobbies"
 }

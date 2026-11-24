@@ -3,3 +3,6 @@ obj/
 release/
 *.user
 .vs/
+kill.log
+live.log
+window.png

@@ -79,19 +79,42 @@ namespace Hd2Qd.LobbyBrowser
                 watchdog.Start();
 
                 string line;
+                var answered = false;         // the helper said something final: rooms or an error
+                var progressed = false;       // it had begun: Steam was up and planets were asked
                 while ((line = process.StandardOutput.ReadLine()) != null)
                 {
                     var message = Parse(line);
                     if (message == null) continue;
                     // a Json array comes back as an ArrayList, not a List<object>
-                    if (message.TryGetValue("progress", out var p) && p is System.Collections.IList pair && pair.Count == 2 && progress != null)
-                        progress(Convert.ToInt32(pair[0]), Convert.ToInt32(pair[1]));
+                    if (message.ContainsKey("ready"))
+                    {
+                        progressed = true;                  // it is up; what follows is the scan
+                    }
+                    else if (message.TryGetValue("progress", out var p) && p is System.Collections.IList pair && pair.Count == 2)
+                    {
+                        progressed = true;
+                        if (progress != null) progress(Convert.ToInt32(pair[0]), Convert.ToInt32(pair[1]));
+                    }
                     else if (message.TryGetValue("rooms", out var rooms) && rooms is System.Collections.IList list)
+                    {
+                        answered = true;
                         Read(result, message, list, lang);
+                    }
                     else if (message.TryGetValue("error", out var error) && !string.IsNullOrEmpty(Convert.ToString(error)))
+                    {
+                        answered = true;
                         result.Error = Convert.ToString(error);
+                    }
                 }
                 process.WaitForExit(5000);
+
+                // No answer at all: Steam ended the process (its Stop ends what it counts as the
+                // game, and a scan is such a thing), or the program failed before it could speak.
+                // Steam's own banner on stderr is not an error to show a player.
+                if (result.Error == null && !answered)
+                    result.Error = progressed
+                        ? Words.Get(lang, "helper_stopped")
+                        : Words.F(lang, "helper_nothing", Exit(process, errors));
             }
             catch (Exception e)
             {
@@ -101,9 +124,24 @@ namespace Hd2Qd.LobbyBrowser
             {
                 try { process?.Dispose(); } catch { }
             }
-            if (result.Error == null && result.Rooms.Count == 0 && errors.Length > 0)
-                result.Error = Words.F(lang, "helper_failed", errors.ToString().Trim());
             return result;
+        }
+
+        /// <summary>Why the helper said nothing: its exit code, and whatever it wrote to stderr
+        /// that is not Steam's own banner.</summary>
+        static string Exit(Process process, StringBuilder errors)
+        {
+            var said = new List<string>();
+            foreach (var line in errors.ToString().Split('\n'))
+            {
+                var text = line.Trim();
+                if (text == "" || text.StartsWith("Setting breakpad minidump") || text.StartsWith("SteamInternal_SetMinidumpSteamID")) continue;
+                said.Add(text);
+            }
+            var code = "";
+            try { if (process.HasExited) code = "exit " + process.ExitCode; } catch { }
+            var detail = string.Join(" ", said.ToArray());
+            return detail != "" ? detail : code != "" ? code : "no answer";
         }
 
         static Dictionary<string, object> Parse(string line)

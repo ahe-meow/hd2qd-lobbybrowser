@@ -2,6 +2,7 @@
   "title": "大厅搜索器",
   "summary": "列出《绝地潜兵2》的公开大厅及其星球、战线、难度、任务、地区和人数，选中即可加入。",
   "refresh": "刷新",
+  "refresh_tip": "每次扫描会开一个很短的 Steam 会话（大厅列表只能从 Steamworks 取），这几秒里 Steam 会把游戏显示为运行中，随后消失。",
   "join": "加入",
   "public_only": "只看公开房",
   "hide_nosession": "隐藏无会话房",
@@ -48,5 +49,7 @@
   "steam_missing": "找不到 steam_api64.dll：请确认已安装《绝地潜兵2》，或用环境变量 HD2_STEAM_API 指定其路径。",
   "steam_init": "Steam 初始化失败（{0}）。请确认 Steam 客户端已启动并已登录。",
   "helper_failed": "扫描程序没有返回结果：{0}",
+  "helper_stopped": "这次扫描被 Steam 结束了——库里的“停止”会结束它当成游戏的进程，一次扫描也算。再点「刷新」即可重试。",
+  "helper_nothing": "扫描程序没有给出结果（{0}）。",
   "cmd_lobbies": "列出《绝地潜兵2》的公开大厅"
 }

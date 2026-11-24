@@ -52,6 +52,14 @@ manager's settings folder on first use and starts it for each scan. It is the he
 knows as Helldivers 2, and it lives for one scan: at worst, a Stop ends a scan, and the next
 Refresh starts another.
 
+**Steam still shows the game as running while a scan runs** — ten seconds or so. That is what
+initialising Steamworks *means*: the lobby list has no read-only door (the same call is what Steam
+idlers use to make a game look played). Only two things are ours to choose: how long the session
+lives, and what pays for it. So the session covers the lobby requests alone — the planet table is
+read before Steam is started — and it is the helper, never the manager, that a Stop ends. The
+Refresh button's tip says as much, and a scan ended that way reports it in one line instead of
+Steam's own banner.
+
 ## What it reads, what it writes, what it contacts
 
 - **Reads:** `HKCU\Software\Valve\Steam` (`SteamPath`) and `libraryfolders.vdf` only to find
@@ -128,6 +136,12 @@ Steamworks，所以关游戏时它也被关掉了。
 （64 位 .NET Framework，作为资源嵌在 DLL 内），首次使用时写到管理器的设置目录，每次扫描启动一次。
 被 Steam 认作《绝地潜兵2》的是这个助手，它只活一次扫描：最坏情况是点“停止”时这次扫描被结束，
 再点刷新就重来。
+
+**扫描期间 Steam 仍会把游戏显示为“运行中”**，大约十秒。这是“初始化 Steamworks”这个动作本身的含义——
+大厅列表没有只读通道（Steam 挂机工具正是靠这一点让游戏看起来在运行）。能选的只有两件事：会话活多久、
+由谁承担后果。所以会话只覆盖取大厅的那几秒——星球表在启动 Steam 之前就读好了——而被“停止”结束的
+永远是助手，不是管理器。刷新的悬停提示写明了这一点；这样被结束的扫描只会显示一行说明，而不是
+Steam 自己那串 breakpad 文本。
 
 ## 读写与联网
 

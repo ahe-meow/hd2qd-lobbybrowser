@@ -28,6 +28,9 @@ namespace Hd2Qd.LobbyBrowser
                 var filters = request != null && request.TryGetValue("filters", out var f) && f is Dictionary<string, object> d
                     ? Filters.FromJson(d)
                     : new Filters();
+                // said at once: a process that stops here was ended from outside (Steam's Stop),
+                // which is not the same as one that never started
+                Say(new Dictionary<string, object> { ["ready"] = 1 });
                 var result = Scanner.Scan(filters, lang, (done, total) =>
                     Console.Out.WriteLine("{\"progress\":[" + done + "," + total + "]}"));
                 Say(new Dictionary<string, object>

@@ -67,7 +67,7 @@ namespace Hd2Qd.LobbyBrowser
             _home = host != null && host.TryGetValue("home", out var home) ? home as string : null;
             _foot = host != null && host.TryGetValue("foot", out var foot) ? foot as Action<string, string> : null;
 
-            _refresh = new Button { Content = Words.Get(lang, "refresh"), Style = Theme.S("Ghost"), MinHeight = 36, Padding = new Thickness(16, 0, 16, 0), Margin = new Thickness(0, 0, 8, 0) };
+            _refresh = new Button { Content = Words.Get(lang, "refresh"), Style = Theme.S("Ghost"), MinHeight = 36, Padding = new Thickness(16, 0, 16, 0), Margin = new Thickness(0, 0, 8, 0), ToolTip = Words.Get(lang, "refresh_tip") };
             _refresh.Click += (s, e) => Refresh();
 
             _difficulty = new Button { Content = Words.Get(lang, "diff_any"), Style = Theme.S("Ghost"), MinHeight = 36, Padding = new Thickness(16, 0, 16, 0), Margin = new Thickness(0, 0, 12, 0) };

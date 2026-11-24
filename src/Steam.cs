@@ -241,7 +241,7 @@ namespace Hd2Qd.LobbyBrowser
                 var count = -1;
                 if (call != 0)
                 {
-                    var until = DateTime.UtcNow.AddSeconds(4);
+                    var until = DateTime.UtcNow.AddSeconds(2.5);
                     while (DateTime.UtcNow < until)
                     {
                         byte failed;
@@ -276,16 +276,20 @@ namespace Hd2Qd.LobbyBrowser
 
         static readonly object Call = new object();
 
-        /// <summary>Asks Steam for every lobby's data, then waits for the first answer, as the
-        /// game's own list does (Steam fills them in asynchronously).</summary>
+        /// <summary>Asks Steam for every lobby's data, then waits for the answers to begin, as the
+        /// game's own list does (Steam fills them in asynchronously). A few lobbies are looked at,
+        /// not one: the first may publish nothing at all, and waiting the whole cap for it made
+        /// every scan a second longer.</summary>
         internal void AskData(IList<ulong> lobbies)
         {
             if (!Ok || lobbies.Count == 0) return;
             foreach (var id in lobbies) _requestData(_matchmaking, id);
-            var until = DateTime.UtcNow.AddSeconds(2.5);
+            var sample = Math.Min(8, lobbies.Count);
+            var until = DateTime.UtcNow.AddSeconds(1.5);
             while (DateTime.UtcNow < until)
             {
-                if (Data(lobbies[0], "12") != "" || Data(lobbies[0], "1") != "") return;
+                for (var i = 0; i < sample; i++)
+                    if (Data(lobbies[i], "12") != "" || Data(lobbies[i], "1") != "") return;
                 Thread.Sleep(20);
             }
         }
@@ -338,7 +342,9 @@ namespace Hd2Qd.LobbyBrowser
         }
 
         /// <summary>The host's name when Steam knows the host as a Steam user (the lobby is not
-        /// crossplay, or the host is on Steam); empty otherwise.</summary>
+        /// crossplay, or the host is on Steam); empty otherwise. Asked for, then looked for until
+        /// every name is there or a moment has passed — a fixed sleep waited for the slowest
+        /// answer even when they were all in.</summary>
         internal void Names(IList<Room> rooms)
         {
             var pending = new List<Room>();
@@ -347,15 +353,23 @@ namespace Hd2Qd.LobbyBrowser
             if (pending.Count == 0) return;
             foreach (var r in pending)
                 try { _requestInfo(_friends, ulong.Parse(r.HostId), false); } catch { }
-            Thread.Sleep(800);
-            foreach (var r in pending)
+
+            var until = DateTime.UtcNow.AddMilliseconds(600);
+            while (true)
             {
-                try
+                var known = 0;
+                foreach (var r in pending)
                 {
-                    var name = Utf8(_persona(_friends, ulong.Parse(r.HostId)));
-                    if (name != "" && name != "[unknown]") r.Host = name;
+                    if (r.Host != "") { known++; continue; }
+                    try
+                    {
+                        var name = Utf8(_persona(_friends, ulong.Parse(r.HostId)));
+                        if (name != "" && name != "[unknown]") { r.Host = name; known++; }
+                    }
+                    catch { known++; }                       // a host Steam will never name
                 }
-                catch { }
+                if (known >= pending.Count || DateTime.UtcNow >= until) return;
+                Thread.Sleep(40);
             }
         }
 
