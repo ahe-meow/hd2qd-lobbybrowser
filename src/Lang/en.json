@@ -51,7 +51,6 @@
   "stage_rooms": "Reading lobby data…",
   "stage_platforms": "Looking up host platforms…",
   "stage_pings": "Measuring latency…",
-  "progress_working": "Working",
   "detail_planets": "api.helldivers2.dev · read at most once every five minutes",
   "detail_steam": "Starting a one-shot helper and steam_api64.dll",
   "detail_scan": "Now: {0} · Steam is returning the lobby list",

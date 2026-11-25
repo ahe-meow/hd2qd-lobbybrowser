@@ -26,11 +26,11 @@ difficulty, the switches, the missions, the sort) and put it back with one click
 **Load** and **Delete** beside it, so a long list costs one line a preset — a card of the manager's,
 not a menu item per action.
 
-**Refresh** shows its progress in the bottom bar on two lines: the stage with a real percentage
-and a thin bar for the planet scan, and underneath what is actually happening ("Now: Mars · Steam
-is returning the lobby list"). Only the planet scan has a real counter; reading the planet table,
-opening Steam, parsing lobbies, the PlayFab lookup and the latency measurement show a moving bar
-and *Working* instead of an invented percentage.
+**Refresh** shows its progress in a thin bar pinned to the window's bottom edge: a growing fill
+for the planet scan and a moving sweep for the other stages. The stage and what is actually
+happening ("Now: Mars · Steam is returning the lobby list") stay on two lines above it. No
+percentage is displayed — only the planet scan has a real counter, and the other stages show a
+moving bar instead of inventing one.
 
 **Join** — bottom right, or a double-click, or Enter — opens
 `steam://joinlobby/553850/<lobby>/<host>` and nothing else. When the game is closed, Steam itself
@@ -203,9 +203,9 @@ it. `tests\Verify.exe <dll>` checks it against the plugin contract of
 `presets.json`。每个名字独占一行，**载入**与**删除**就在同一行右侧——预设再多也只占“每套一行”，
 不随动作数量翻倍。
 
-**刷新**时在底部状态栏显示两行进度：第一行是当前阶段、真实百分比和细进度条（星球扫描阶段），
-第二行是正在做的事（例如"当前：玛尔特 · Steam 正在返回房间列表"）。只有星球扫描有真实计数；
-读取星球表、连接 Steam、解析房间、查询房主平台、测量延迟这些阶段显示流动条和"进行中"，不编造百分比。
+**刷新**时在窗口底边显示一条细进度条：星球扫描阶段为推进填充，其余阶段为流动扫动。
+上方两行分别是当前阶段和正在做的事（例如"当前：玛尔特 · Steam 正在返回房间列表"）。
+界面不再显示百分比；只有星球扫描有真实计数，其余阶段用流动条表示，不编造百分比。
 
 **加入**在右下角（也可双击行、回车）：只做一件事——打开 `steam://joinlobby/553850/<大厅>/<房主>`。
 游戏没运行时，Steam 自己会用 `+connect_lobby <大厅>` 启动游戏，游戏启动过程中直接进房；这正是 Valve 文档里

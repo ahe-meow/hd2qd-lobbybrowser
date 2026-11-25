@@ -51,7 +51,6 @@
   "stage_rooms": "读取房间数据…",
   "stage_platforms": "查询房主平台…",
   "stage_pings": "测量延迟…",
-  "progress_working": "进行中",
   "detail_planets": "api.helldivers2.dev · 最多每 5 分钟读取一次",
   "detail_steam": "启动一次性 helper，初始化 steam_api64.dll",
   "detail_scan": "当前：{0} · Steam 正在返回房间列表",

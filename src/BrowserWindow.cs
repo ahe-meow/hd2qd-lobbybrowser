@@ -99,13 +99,6 @@ namespace Hd2Qd.LobbyBrowser
             FontSize = 12, Foreground = Theme.B("Muted"), TextTrimming = TextTrimming.CharacterEllipsis,
             Visibility = Visibility.Collapsed,
         };
-        readonly TextBlock _progressPercent = new TextBlock
-        {
-            FontFamily = Theme.Font("Mono"), FontSize = 13, FontWeight = FontWeights.SemiBold,
-            Foreground = Theme.B("Muted"), TextAlignment = TextAlignment.Right,
-            MinWidth = 56, Margin = new Thickness(14, 0, 0, 2), VerticalAlignment = VerticalAlignment.Bottom,
-            Visibility = Visibility.Collapsed,
-        };
         readonly Border _progressTrack;
         readonly Border _progressFill = new Border { Background = Theme.B("Yellow") };
         readonly ColumnDefinition _progressBefore = new ColumnDefinition();
@@ -245,24 +238,16 @@ namespace Hd2Qd.LobbyBrowser
             line.Children.Add(_join);
             line.Children.Add(_status);
 
-            var detailLine = new Grid();
-            detailLine.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            detailLine.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            _progressDetail.Margin = new Thickness(0, 5, 14, 0);
-            Grid.SetColumn(_progressDetail, 0);
-            Grid.SetColumn(_progressPercent, 1);
-            detailLine.Children.Add(_progressDetail);
-            detailLine.Children.Add(_progressPercent);
-
             var bottom = new Grid { Margin = new Thickness(0, 12, 0, 0) };
             bottom.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             bottom.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             bottom.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             Grid.SetRow(line, 0);
-            Grid.SetRow(detailLine, 1);
+            _progressDetail.Margin = new Thickness(0, 5, 0, 0);
+            Grid.SetRow(_progressDetail, 1);
             Grid.SetRow(_progressTrack, 2);
             bottom.Children.Add(line);
-            bottom.Children.Add(detailLine);
+            bottom.Children.Add(_progressDetail);
             bottom.Children.Add(_progressTrack);
 
             var root = new Grid { Margin = new Thickness(20, 18, 20, 0), MinWidth = 1120, MinHeight = 560, Background = Theme.B("Ground900") };
@@ -786,7 +771,6 @@ namespace Hd2Qd.LobbyBrowser
         {
             _progressTimer.Stop();
             _progressTrack.Visibility = Visibility.Collapsed;
-            _progressPercent.Visibility = Visibility.Collapsed;
             _progressDetail.Visibility = Visibility.Collapsed;
             _status.Text = text;
             try { _foot?.Invoke(text, "Muted"); } catch { }   // the manager's own status bar
@@ -812,13 +796,12 @@ namespace Hd2Qd.LobbyBrowser
             }
         }
 
-        /// <summary>One line of stage and percent, one line of what is actually happening. Only
-        /// the planet stage has a real counter; every other stage uses a moving bar and says so,
-        /// rather than inventing a percentage the scan cannot know.</summary>
+        /// <summary>One line of stage, one line of what is actually happening. Only the planet
+        /// stage has a real counter; every other stage uses a moving bar rather than inventing a
+        /// percentage the scan cannot know.</summary>
         void SetProgress(string stage, int done, int total, List<int> planets, string lang)
         {
             _progressTrack.Visibility = Visibility.Visible;
-            _progressPercent.Visibility = Visibility.Visible;
             _progressDetail.Visibility = Visibility.Visible;
             var percent = -1.0;
             string detail;
@@ -853,8 +836,6 @@ namespace Hd2Qd.LobbyBrowser
                     break;
             }
             _progressDetail.Text = detail;
-            _progressPercent.Text = percent >= 0 ? Math.Round(percent) + "%" : Words.Get(lang, "progress_working");
-            _progressPercent.Foreground = percent >= 0 ? Theme.B("Yellow") : Theme.B("Muted");
             if (percent >= 0) { _progressTimer.Stop(); Bar(percent); }
             else { Bar(-1); _progressTimer.Start(); }
             try { _foot?.Invoke(_status.Text, "Muted"); } catch { }

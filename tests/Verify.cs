@@ -311,7 +311,7 @@ namespace Hd2Qd.Verify
                 var keys = new[]
                 {
                     "stage_planets", "stage_steam", "stage_scan", "stage_rooms", "stage_platforms",
-                    "stage_pings", "progress_working", "detail_planets", "detail_steam",
+                    "stage_pings", "detail_planets", "detail_steam",
                     "detail_scan", "detail_scan_more", "detail_rooms", "detail_platforms", "detail_pings",
                 };
                 if (get == null) { Check("progress stages are translated", false, "Words.Get missing"); return; }
