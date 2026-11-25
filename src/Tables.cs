@@ -93,6 +93,19 @@ namespace Hd2Qd.LobbyBrowser
             }
         }
 
+        /// <summary>The front alone, for the table's narrow column: the chips may say "East ·
+        /// Terminids", a row has only room for "Terminids".</summary>
+        internal static string FrontShort(string front, string lang)
+        {
+            switch (front)
+            {
+                case "Terminids": return Words.Get(lang, "front_term_short");
+                case "Automatons": return Words.Get(lang, "front_auto_short");
+                case "Illuminate": return Words.Get(lang, "front_illu_short");
+                default: return "";
+            }
+        }
+
         internal static string RegionName(string region, string lang)
         {
             switch ((region ?? "").Trim().ToLowerInvariant())

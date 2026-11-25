@@ -20,13 +20,60 @@ namespace Hd2Qd.LobbyBrowser
     {
         internal static void Show(Window owner, Dictionary<string, object> host)
         {
-            var lang = Words.Lang(host);
-            var page = new LobbyPage(lang, host);
+            var shell = new LobbyShell(host);
             var make = (Func<string, FrameworkElement, Window>)host["window"];
-            var window = make(Words.Get(lang, "title"), page.Root);
-            page.Host = window;
+            var window = make(Words.Get(shell.Lang, "title"), shell.Root);
+            shell.Host = window;
             window.Show();
-            page.Refresh();
+            shell.Refresh();
+        }
+    }
+
+    /// <summary>The window body, and the one thing that survives a language switch: the element
+    /// the manager's frame holds. A switch builds that body again in the other language, carrying
+    /// the filters, the rows already scanned and the pings measured so far — the frame itself is
+    /// the manager's, and is not touched.</summary>
+    internal sealed class LobbyShell
+    {
+        readonly Grid _root = new Grid();
+        readonly Dictionary<string, object> _host;
+        readonly string _home;
+        readonly string _handed;
+        LobbyPage _page;
+
+        internal LobbyShell(Dictionary<string, object> host)
+        {
+            _host = host;
+            _home = host != null && host.TryGetValue("home", out var home) ? home as string : null;
+            _handed = Words.Lang(host);
+            Lang = Language.Chosen(_home) ?? Language.Manager(_home, _handed);
+            Show(null);
+        }
+
+        /// <summary>The language this body is drawn in.</summary>
+        internal string Lang { get; private set; }
+
+        internal FrameworkElement Root => _root;
+
+        internal Window Host { get; set; }
+
+        internal void Refresh() => _page.Refresh();
+
+        /// <summary>Another language for this window, or (null) HD2QD's own again. The choice is
+        /// kept beside the presets; the body is drawn once more in it with what it already knew.</summary>
+        internal void Switch(string tag)
+        {
+            var state = _page.Save();
+            Language.Choose(_home, tag);
+            Lang = tag ?? Language.Manager(_home, _handed);
+            Show(state);
+        }
+
+        void Show(LobbyPage.State state)
+        {
+            _root.Children.Clear();
+            _page = new LobbyPage(Lang, _host, this, state);
+            _root.Children.Add(_page.Root);
         }
     }
 
@@ -35,7 +82,7 @@ namespace Hd2Qd.LobbyBrowser
         enum Sort { Planet, Front, Diff, Members, Mission, Privacy, Platform, Region, Ping, Host, Age }
 
         // the table's columns, in the same stars in the header and in every row
-        static readonly double[] Columns = { 1.45, 0.85, 0.65, 0.5, 1.45, 0.55, 0.55, 0.6, 0.36, 0.5, 0.95, 0.5 };
+        static readonly double[] Columns = { 1.45, 0.8, 0.65, 0.6, 1.4, 0.55, 0.55, 0.6, 0.36, 0.5, 0.95, 0.5 };
         static readonly string[] Heads = { "col_planet", "col_front", "col_diff", "col_members", "col_mission", "col_priv", "col_platform", "col_region", "col_sos", "col_ping", "col_host", "col_age" };
         static readonly bool[] AlignRight = { false, false, false, true, false, false, false, false, false, true, false, true };
         static readonly bool[] Numeric = { false, false, false, true, false, false, false, false, false, true, false, true };
@@ -74,11 +121,13 @@ namespace Hd2Qd.LobbyBrowser
         bool _busy;
         int _pingRound;
 
-        internal Window Host;
+        LobbyShell _shell;
+        int _scannedPlanets;
 
-        internal LobbyPage(string lang, Dictionary<string, object> host)
+        internal LobbyPage(string lang, Dictionary<string, object> host, LobbyShell shell, State state)
         {
             _lang = lang;
+            _shell = shell;
             _home = host != null && host.TryGetValue("home", out var home) ? home as string : null;
             _foot = host != null && host.TryGetValue("foot", out var foot) ? foot as Action<string, string> : null;
             _askText = host != null && host.TryGetValue("ask_text", out var ask) ? ask as Func<string, string, string, string> : null;
@@ -103,7 +152,7 @@ namespace Hd2Qd.LobbyBrowser
             };
             _join.Click += (s, e) => Join();
 
-            var bar = new WrapPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 0, 14) };
+            var bar = new WrapPanel { VerticalAlignment = VerticalAlignment.Center };
             bar.Children.Add(_refresh);
             bar.Children.Add(_planetButton);
             bar.Children.Add(_difficulty);
@@ -158,21 +207,116 @@ namespace Hd2Qd.LobbyBrowser
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            Grid.SetRow(bar, 0);
+            // the filters left, the language of this window at the right edge of the same row
+            var language = new Button
+            {
+                Content = _lang == Language.Zh ? "中文" : "EN",
+                Style = Theme.S("Ghost"), MinHeight = 36, Padding = new Thickness(14, 0, 14, 0),
+                VerticalAlignment = VerticalAlignment.Center, ToolTip = Words.Get(lang, "language"),
+            };
+            language.Click += (s, e) => PickLanguage(language);
+            var top = new DockPanel { Margin = new Thickness(0, 0, 0, 14) };
+            DockPanel.SetDock(language, Dock.Right);
+            top.Children.Add(language);
+            top.Children.Add(bar);
+            Grid.SetRow(top, 0);
             Grid.SetRow(card, 1);
             Grid.SetRow(bottom, 2);
-            root.Children.Add(bar);
+            root.Children.Add(top);
             root.Children.Add(card);
             root.Children.Add(bottom);
             Root = root;
 
             BuildHeader();
+            if (state != null) Restore(state);
             _empty.Text = Words.Get(lang, "empty");
             _empty.Visibility = Visibility.Collapsed;
-            SetStatus(Words.Get(lang, "ready"));
+            ShowRows();
+            SetStatus(state != null && state.Rooms.Count > 0
+                ? state.PlanetsScanned == 0
+                    ? Words.F(lang, "found_world", state.Rooms.Count)
+                    : Words.F(lang, "found", state.Rooms.Count, state.PlanetsScanned)
+                : Words.Get(lang, "ready"));
         }
 
         internal FrameworkElement Root { get; }
+
+        /// <summary>What a language switch carries over: the filters in hand, the rows already
+        /// scanned (with their pings), and how many planets the scan asked about.</summary>
+        internal sealed class State
+        {
+            internal List<Room> Rooms = new List<Room>();
+            internal HashSet<int> Planets = new HashSet<int>();
+            internal HashSet<string> Missions = new HashSet<string>();
+            internal List<string> Fronts = new List<string>();
+            internal int Difficulty;
+            internal bool PublicOn = true;
+            internal bool NoSessionOn = true;
+            internal bool FullOn;
+            internal bool SosOn;
+            internal int Sort;
+            internal bool SortDesc;
+            internal string Self = "0";
+            internal int PlanetsScanned;
+        }
+
+        internal State Save() => new State
+        {
+            Rooms = _rooms,
+            Planets = new HashSet<int>(_planets),
+            Missions = new HashSet<string>(_missions),
+            Fronts = _fronts.Where(box => box.IsChecked == true).Select(box => (string)box.Tag).ToList(),
+            Difficulty = _difficultyValue,
+            PublicOn = _publicOnly.IsChecked == true,
+            NoSessionOn = _hideNoSession.IsChecked == true,
+            FullOn = _hideFull.IsChecked == true,
+            SosOn = _sosOnly.IsChecked == true,
+            Sort = (int)_sort,
+            SortDesc = _sortDesc,
+            Self = _self,
+            PlanetsScanned = _scannedPlanets,
+        };
+
+        void Restore(State state)
+        {
+            _rooms = state.Rooms;
+            _self = state.Self;
+            _scannedPlanets = state.PlanetsScanned;
+            _planets.Clear();
+            foreach (var planet in state.Planets) _planets.Add(planet);
+            _missions.Clear();
+            foreach (var hash in state.Missions) _missions.Add(hash);
+            _difficultyValue = state.Difficulty;
+            if (_difficultyValue > 0) _difficulty.Content = Words.F(_lang, "diff_n", _difficultyValue);
+            _publicOnly.IsChecked = state.PublicOn;
+            _hideNoSession.IsChecked = state.NoSessionOn;
+            _hideFull.IsChecked = state.FullOn;
+            _sosOnly.IsChecked = state.SosOn;
+            foreach (var box in _fronts) box.IsChecked = state.Fronts.Contains((string)box.Tag);
+            _sort = (Sort)state.Sort;
+            _sortDesc = state.SortDesc;
+            BuildHeader();
+            UpdateFilterLabels();
+        }
+
+        /// <summary>The two languages of this plugin, and the manager's own: the choice is the
+        /// window's (kept beside the presets), and following HD2QD is what it starts with.</summary>
+        void PickLanguage(Button anchor)
+        {
+            var chosen = Language.Chosen(_home);
+            var menu = new ContextMenu { PlacementTarget = anchor, Placement = PlacementMode.Bottom };
+            var zh = new MenuItem { Header = "中文", IsCheckable = true, IsChecked = _lang == Language.Zh };
+            zh.Click += (s, e) => _shell.Switch(Language.Zh);
+            var en = new MenuItem { Header = "English", IsCheckable = true, IsChecked = _lang == Language.En };
+            en.Click += (s, e) => _shell.Switch(Language.En);
+            var follow = new MenuItem { Header = Words.Get(_lang, "lang_follow"), IsCheckable = true, IsChecked = chosen == null };
+            follow.Click += (s, e) => _shell.Switch(null);
+            menu.Items.Add(zh);
+            menu.Items.Add(en);
+            menu.Items.Add(new Separator());
+            menu.Items.Add(follow);
+            menu.IsOpen = true;
+        }
 
         Button Farm(string text, string style) => new Button
         {
@@ -597,7 +741,7 @@ namespace Hd2Qd.LobbyBrowser
             var manual = _planets.Count > 0;
             var fronts = filters.Fronts.ToList();
             var difficulty = _difficultyValue;
-            var dispatcher = Host != null ? Host.Dispatcher : Dispatcher.CurrentDispatcher;
+            var dispatcher = _shell.Host != null ? _shell.Host.Dispatcher : Dispatcher.CurrentDispatcher;
             Task.Run(() =>
             {
                 string note = null;
@@ -636,6 +780,7 @@ namespace Hd2Qd.LobbyBrowser
             }
             _rooms = result.Rooms;
             _self = result.Self;
+            _scannedPlanets = result.Planets;
             _missions.RemoveWhere(hash => _rooms.All(r => (r.MissionHash ?? "") != hash));
             UpdateFilterLabels();
             ShowRows();
@@ -660,7 +805,7 @@ namespace Hd2Qd.LobbyBrowser
                 return;
             }
             var round = ++_pingRound;
-            var dispatcher = Host != null ? Host.Dispatcher : Dispatcher.CurrentDispatcher;
+            var dispatcher = _shell.Host != null ? _shell.Host.Dispatcher : Dispatcher.CurrentDispatcher;
             Task.Run(() => Ping.Regions(regions)).ContinueWith(task => dispatcher.BeginInvoke((Action)(() =>
             {
                 if (round != _pingRound || task.IsFaulted) return;

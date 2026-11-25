@@ -90,5 +90,10 @@
   "helper_failed": "The scan program did not answer: {0}",
   "helper_stopped": "Steam ended this scan — the library's Stop ends whatever counts as the game, and a scan is one. Refresh to look again.",
   "helper_nothing": "The scan program gave no answer ({0}).",
-  "cmd_lobbies": "print the public Helldivers 2 lobbies"
+  "cmd_lobbies": "print the public Helldivers 2 lobbies",
+  "language": "Language",
+  "lang_follow": "Follow HD2QD",
+  "front_term_short": "Terminids",
+  "front_auto_short": "Automatons",
+  "front_illu_short": "Illuminate"
 }

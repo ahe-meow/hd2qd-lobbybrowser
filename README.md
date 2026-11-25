@@ -56,6 +56,11 @@ longer ban:
 The table is read in the manager, not in the helper, so the scan itself makes no request but
 Steam's.
 
+The window speaks **HD2QD's own language**: the manager gives a tag when it opens the window, and
+its settings file (`gui.json`, "lang") is read too, so a window opened after the manager's language
+was changed follows it. The button at the right of the filter row switches this window between 中文
+and English — or back to following HD2QD — and keeps the choice beside the presets.
+
 The window is drawn in the manager's own theme and never in WPF's: the ground and card of
 `Ground900`/`Ground700`, `Ghost` and `Primary` buttons, `Chip` for the fronts, `Tick` for the
 switches, banded rows with the chosen one filled yellow, the thin dark scrollbar. The theme is
@@ -109,7 +114,8 @@ Steam's own banner.
 - **Writes:** all in `%USERPROFILE%\.hd2-mod-cli\lobbybrowser\`: `HD2QD.LobbyBrowser.Helper.<version>.exe`,
   written from the DLL's own resource and replaced when the plugin updates; `presets.json`, the
   presets the player saved; `planets.json`, the last planet table and any rate-limit cooldown;
-  `platforms.json`, the host platforms PlayFab named, with when it named them. No log.
+  `platforms.json`, the host platforms PlayFab named, with when it named them; `language.txt`, the
+  window's language when it was set to something other than HD2QD's (no file: follow). No log.
 - **Contacts:** the Steam client on this PC (local); `https://api.helldivers2.dev/api/v1/planets`
   for the planet table (once per five minutes, with the identifying headers that API asks for); and
   PlayFab's `974a9` title (`https://974a9.playfabapi.com`) for host platforms, signed in with the
@@ -168,6 +174,10 @@ it. `tests\Verify.exe <dll>` checks it against the plugin contract of
 取好，票据不会随会话失效），每次扫描最多八秒，答案在 `platforms.json` 里保留 30 分钟。**隐私**列是大厅自己的键 19：
 公开 / 好友 / 私密。
 
+窗口说的是 **HD2QD 自己的语言**：管理器打开窗口时会给出语言标签，插件还会读它的设置文件（`gui.json` 的
+"lang"），所以在管理器里改过语言之后再打开的窗口会跟着变。筛选行最右侧的按钮把**本窗口**在 中文 / English 之间
+切换，或切回“跟随 HD2QD”，选择与预设放在一起。
+
 窗口用的是管理器自己的主题，不是 WPF 默认控件：`Ground900`/`Ground700` 的底与卡片、`Ghost` 与
 `Primary` 按钮、`Chip` 战线、`Tick` 开关、隔行底色与选中行黄底、细窄深色滚动条。主题优先取运行中的
 管理器（`Application.Current.TryFindResource`）；`Ui.xaml` 是同一套样式写明颜色的副本，供非管理器
@@ -219,7 +229,7 @@ Steam 自己那串 breakpad 文本。
   Steam 的公开大厅列表与大厅数据。不读游戏进程、不读内存、不改游戏文件。
 - **写**：都在管理器设置目录 `%USERPROFILE%\.hd2-mod-cli\lobbybrowser` 下：`HD2QD.LobbyBrowser.Helper.<版本>.exe`
   （来自 DLL 内嵌资源，升级时替换）、`presets.json`（玩家保存的预设）、`planets.json`（上次的星球表与限流冷却）、
-  `platforms.json`（PlayFab 给出的房主平台及时间）。不写日志。
+  `platforms.json`（PlayFab 给出的房主平台及时间）、`language.txt`（本窗口的语言，跟随管理器时不写）。不写日志。
 - **联网**：本机 Steam 客户端（本地）；`https://api.helldivers2.dev/api/v1/planets`（星球表，最多每五分钟一次，
   带该接口要求的标识头）；以及 PlayFab 的 `974a9` 标题（`https://974a9.playfabapi.com`）查房主平台——用 Steam 票据
   登录，每个跨平台房主一次资料请求。

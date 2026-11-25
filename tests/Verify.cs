@@ -118,6 +118,45 @@ namespace Hd2Qd.Verify
             }
         }
 
+        /// <summary>The language rule: a manager tag maps onto the two this plugin has, the
+        /// player's choice is read from its own file and beats the manager's, and following
+        /// reads the manager's gui.json as it stands.</summary>
+        static void CheckLanguage(Assembly asm)
+        {
+            try
+            {
+                var type = asm.GetType("Hd2Qd.LobbyBrowser.Language");
+                if (type == null) { Check("language follows and overrides", false, "Language missing"); return; }
+                var flags = BindingFlags.NonPublic | BindingFlags.Static;
+                var tagOf = type.GetMethod("Tag", flags);
+                var choose = type.GetMethod("Choose", flags);
+                var chosen = type.GetMethod("Chosen", flags);
+                var manager = type.GetMethod("Manager", flags);
+
+                var zhTw = (string)tagOf.Invoke(null, new object[] { "zh-TW" });
+                var fr = (string)tagOf.Invoke(null, new object[] { "fr-FR" });
+
+                var home = Path.Combine(Home(), "lang-" + Guid.NewGuid().ToString("N"));
+                Directory.CreateDirectory(home);
+                File.WriteAllText(Path.Combine(home, "gui.json"), "{\"lang\":\"en\"}");
+                var fromFile = (string)manager.Invoke(null, new object[] { home, "zh-CN" });
+
+                choose.Invoke(null, new object[] { home, "zh-CN" });
+                var kept = (string)chosen.Invoke(null, new object[] { home });
+
+                choose.Invoke(null, new object[] { home, null });
+                var cleared = chosen.Invoke(null, new object[] { home });
+
+                Check("language follows and overrides",
+                    zhTw == "zh-CN" && fr == "en" && fromFile == "en" && kept == "zh-CN" && cleared == null,
+                    "zh-TW=" + zhTw + " fr=" + fr + " gui=" + fromFile + " chosen=" + (kept ?? "null") + " cleared=" + (cleared == null ? "null" : cleared));
+            }
+            catch (Exception e)
+            {
+                Check("language follows and overrides", false, (e.InnerException ?? e).Message);
+            }
+        }
+
         /// <summary>A settings folder of the test's own: the manager's own is not written to.</summary>
         static string Home()
         {
@@ -180,6 +219,7 @@ namespace Hd2Qd.Verify
             Check("no other file needed beside it", beside.Length == 0, string.Join(", ", beside.Select(Path.GetFileName)));
 
             CheckPresets(asm);
+            CheckLanguage(asm);
 
             // ---- a live scan through the plugin's own command ----
             if (!offline)

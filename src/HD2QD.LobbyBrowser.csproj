@@ -16,7 +16,7 @@
     <Nullable>disable</Nullable>
     <AssemblyName>HD2QD.LobbyBrowser</AssemblyName>
     <RootNamespace>Hd2Qd.LobbyBrowser</RootNamespace>
-    <Version>1.5.0</Version>
+    <Version>1.6.0</Version>
     <Product>HD2QD Lobby Browser</Product>
     <Company>ahe-meow</Company>
     <Copyright>MIT License</Copyright>
@@ -36,6 +36,7 @@
     <Compile Include="BrowserWindow.cs" />
     <Compile Include="Helper.cs" />
     <Compile Include="Live.cs" />
+    <Compile Include="Language.cs" />
     <Compile Include="Lobby.cs" />
     <Compile Include="Picker.cs" />
     <Compile Include="Ping.cs" />

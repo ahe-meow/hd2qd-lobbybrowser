@@ -89,5 +89,10 @@
   "helper_failed": "扫描程序没有返回结果：{0}",
   "helper_stopped": "这次扫描被 Steam 结束了——库里的“停止”会结束它当成游戏的进程，一次扫描也算。再点「刷新」即可重试。",
   "helper_nothing": "扫描程序没有给出结果（{0}）。",
-  "cmd_lobbies": "列出《绝地潜兵2》的公开大厅"
+  "cmd_lobbies": "列出《绝地潜兵2》的公开大厅",
+  "language": "语言",
+  "lang_follow": "跟随 HD2QD",
+  "front_term_short": "虫族",
+  "front_auto_short": "机器人",
+  "front_illu_short": "光能族"
 }

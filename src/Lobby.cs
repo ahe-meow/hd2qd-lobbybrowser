@@ -60,7 +60,7 @@ namespace Hd2Qd.LobbyBrowser
         internal void Dress(string lang)
         {
             PlanetText = Planet > 0 ? Tables.Planet(Planet, lang) : Words.Get(lang, "no_planet");
-            FrontText = Tables.FrontName(Front, lang);
+            FrontText = Tables.FrontShort(Front, lang);
             DifficultyText = Difficulty > 0 ? Words.F(lang, "diff_n", Difficulty) : "—";
             MembersText = Members + "/" + (Limit > 0 ? Limit : 4);
             RegionText = string.IsNullOrEmpty(Region) ? Words.Get(lang, "no_host") : Tables.RegionName(Region, lang);
