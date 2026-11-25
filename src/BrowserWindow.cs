@@ -103,11 +103,11 @@ namespace Hd2Qd.LobbyBrowser
         {
             FontFamily = Theme.Font("Mono"), FontSize = 13, FontWeight = FontWeights.SemiBold,
             Foreground = Theme.B("Muted"), TextAlignment = TextAlignment.Right,
-            MinWidth = 56, Margin = new Thickness(14, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
+            MinWidth = 56, Margin = new Thickness(14, 0, 0, 2), VerticalAlignment = VerticalAlignment.Bottom,
+            Visibility = Visibility.Collapsed,
         };
         readonly Border _progressTrack;
-        readonly Border _progressFill = new Border { Background = Theme.B("Yellow"), CornerRadius = new CornerRadius(4) };
-        readonly Border _progressBox;
+        readonly Border _progressFill = new Border { Background = Theme.B("Yellow") };
         readonly ColumnDefinition _progressBefore = new ColumnDefinition();
         readonly ColumnDefinition _progressBar = new ColumnDefinition();
         readonly ColumnDefinition _progressAfter = new ColumnDefinition();
@@ -154,22 +154,12 @@ namespace Hd2Qd.LobbyBrowser
             meter.ColumnDefinitions.Add(_progressAfter);
             Grid.SetColumn(_progressFill, 1);
             meter.Children.Add(_progressFill);
+            // a full-width hairline stuck to the window's bottom edge — no card, no bottom margin
             _progressTrack = new Border
             {
-                Height = 8, Width = 220,
-                Background = Theme.B("Ground900"), BorderBrush = Theme.B("Grid"), BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(4), ClipToBounds = true, Child = meter,
-                VerticalAlignment = VerticalAlignment.Center,
-            };
-            var progress = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-            progress.Children.Add(_progressTrack);
-            progress.Children.Add(_progressPercent);
-            // a card of its own: padding inside, a clear gap to Join outside, one baseline for both
-            _progressBox = new Border
-            {
-                Background = Theme.B("Ground700"), BorderBrush = Theme.B("Grid"), BorderThickness = new Thickness(1),
-                Padding = new Thickness(14, 0, 14, 0), Height = 32, Margin = new Thickness(0, 0, 20, 0),
-                VerticalAlignment = VerticalAlignment.Center, Child = progress, Visibility = Visibility.Collapsed,
+                Height = 6, Margin = new Thickness(0, 10, 0, 0),
+                Background = Theme.B("Grid"), ClipToBounds = true, Child = meter,
+                VerticalAlignment = VerticalAlignment.Bottom, Visibility = Visibility.Collapsed,
             };
             _progressTimer.Tick += (s, e) => { _progressPhase = (_progressPhase + 4) % 70; Bar(-1); };
             _home = host != null && host.TryGetValue("home", out var home) ? home as string : null;
@@ -248,20 +238,30 @@ namespace Hd2Qd.LobbyBrowser
 
             var line = new DockPanel();
             DockPanel.SetDock(_join, Dock.Right);
-            DockPanel.SetDock(_progressBox, Dock.Right);
             line.Children.Add(_join);
-            line.Children.Add(_progressBox);
             line.Children.Add(_status);
+
+            var detailLine = new Grid();
+            detailLine.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            detailLine.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            _progressDetail.Margin = new Thickness(0, 5, 14, 0);
+            Grid.SetColumn(_progressDetail, 0);
+            Grid.SetColumn(_progressPercent, 1);
+            detailLine.Children.Add(_progressDetail);
+            detailLine.Children.Add(_progressPercent);
+
             var bottom = new Grid { Margin = new Thickness(0, 12, 0, 0) };
             bottom.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             bottom.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            bottom.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             Grid.SetRow(line, 0);
-            _progressDetail.Margin = new Thickness(0, 5, 140, 0);
-            Grid.SetRow(_progressDetail, 1);
+            Grid.SetRow(detailLine, 1);
+            Grid.SetRow(_progressTrack, 2);
             bottom.Children.Add(line);
-            bottom.Children.Add(_progressDetail);
+            bottom.Children.Add(detailLine);
+            bottom.Children.Add(_progressTrack);
 
-            var root = new Grid { Margin = new Thickness(20, 18, 20, 16), MinWidth = 1120, MinHeight = 560, Background = Theme.B("Ground900") };
+            var root = new Grid { Margin = new Thickness(20, 18, 20, 0), MinWidth = 1120, MinHeight = 560, Background = Theme.B("Ground900") };
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -781,7 +781,8 @@ namespace Hd2Qd.LobbyBrowser
         void SetStatus(string text)
         {
             _progressTimer.Stop();
-            _progressBox.Visibility = Visibility.Collapsed;
+            _progressTrack.Visibility = Visibility.Collapsed;
+            _progressPercent.Visibility = Visibility.Collapsed;
             _progressDetail.Visibility = Visibility.Collapsed;
             _status.Text = text;
             try { _foot?.Invoke(text, "Muted"); } catch { }   // the manager's own status bar
@@ -812,7 +813,8 @@ namespace Hd2Qd.LobbyBrowser
         /// rather than inventing a percentage the scan cannot know.</summary>
         void SetProgress(string stage, int done, int total, List<int> planets, string lang)
         {
-            _progressBox.Visibility = Visibility.Visible;
+            _progressTrack.Visibility = Visibility.Visible;
+            _progressPercent.Visibility = Visibility.Visible;
             _progressDetail.Visibility = Visibility.Visible;
             var percent = -1.0;
             string detail;
