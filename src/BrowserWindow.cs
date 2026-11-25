@@ -101,11 +101,13 @@ namespace Hd2Qd.LobbyBrowser
         };
         readonly TextBlock _progressPercent = new TextBlock
         {
-            FontSize = 12, Foreground = Theme.B("Muted"), TextAlignment = TextAlignment.Right,
-            MinWidth = 46, VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed,
+            FontFamily = Theme.Font("Mono"), FontSize = 13, FontWeight = FontWeights.SemiBold,
+            Foreground = Theme.B("Muted"), TextAlignment = TextAlignment.Right,
+            MinWidth = 56, Margin = new Thickness(14, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
         };
         readonly Border _progressTrack;
-        readonly Border _progressFill = new Border { Background = Theme.B("Yellow"), CornerRadius = new CornerRadius(2) };
+        readonly Border _progressFill = new Border { Background = Theme.B("Yellow"), CornerRadius = new CornerRadius(4) };
+        readonly Border _progressBox;
         readonly ColumnDefinition _progressBefore = new ColumnDefinition();
         readonly ColumnDefinition _progressBar = new ColumnDefinition();
         readonly ColumnDefinition _progressAfter = new ColumnDefinition();
@@ -154,10 +156,20 @@ namespace Hd2Qd.LobbyBrowser
             meter.Children.Add(_progressFill);
             _progressTrack = new Border
             {
-                Height = 4, Width = 180, Margin = new Thickness(12, 0, 10, 0),
-                Background = Theme.B("Grid"), CornerRadius = new CornerRadius(2),
-                ClipToBounds = true, Child = meter, VerticalAlignment = VerticalAlignment.Center,
-                Visibility = Visibility.Collapsed,
+                Height = 8, Width = 220,
+                Background = Theme.B("Ground900"), BorderBrush = Theme.B("Grid"), BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(4), ClipToBounds = true, Child = meter,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            var progress = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            progress.Children.Add(_progressTrack);
+            progress.Children.Add(_progressPercent);
+            // a card of its own: padding inside, a clear gap to Join outside, one baseline for both
+            _progressBox = new Border
+            {
+                Background = Theme.B("Ground700"), BorderBrush = Theme.B("Grid"), BorderThickness = new Thickness(1),
+                Padding = new Thickness(14, 0, 14, 0), Height = 32, Margin = new Thickness(0, 0, 20, 0),
+                VerticalAlignment = VerticalAlignment.Center, Child = progress, Visibility = Visibility.Collapsed,
             };
             _progressTimer.Tick += (s, e) => { _progressPhase = (_progressPhase + 4) % 70; Bar(-1); };
             _home = host != null && host.TryGetValue("home", out var home) ? home as string : null;
@@ -236,11 +248,9 @@ namespace Hd2Qd.LobbyBrowser
 
             var line = new DockPanel();
             DockPanel.SetDock(_join, Dock.Right);
-            DockPanel.SetDock(_progressPercent, Dock.Right);
-            DockPanel.SetDock(_progressTrack, Dock.Right);
+            DockPanel.SetDock(_progressBox, Dock.Right);
             line.Children.Add(_join);
-            line.Children.Add(_progressPercent);
-            line.Children.Add(_progressTrack);
+            line.Children.Add(_progressBox);
             line.Children.Add(_status);
             var bottom = new Grid { Margin = new Thickness(0, 12, 0, 0) };
             bottom.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -771,8 +781,7 @@ namespace Hd2Qd.LobbyBrowser
         void SetStatus(string text)
         {
             _progressTimer.Stop();
-            _progressTrack.Visibility = Visibility.Collapsed;
-            _progressPercent.Visibility = Visibility.Collapsed;
+            _progressBox.Visibility = Visibility.Collapsed;
             _progressDetail.Visibility = Visibility.Collapsed;
             _status.Text = text;
             try { _foot?.Invoke(text, "Muted"); } catch { }   // the manager's own status bar
@@ -803,8 +812,7 @@ namespace Hd2Qd.LobbyBrowser
         /// rather than inventing a percentage the scan cannot know.</summary>
         void SetProgress(string stage, int done, int total, List<int> planets, string lang)
         {
-            _progressTrack.Visibility = Visibility.Visible;
-            _progressPercent.Visibility = Visibility.Visible;
+            _progressBox.Visibility = Visibility.Visible;
             _progressDetail.Visibility = Visibility.Visible;
             var percent = -1.0;
             string detail;
@@ -840,6 +848,7 @@ namespace Hd2Qd.LobbyBrowser
             }
             _progressDetail.Text = detail;
             _progressPercent.Text = percent >= 0 ? Math.Round(percent) + "%" : Words.Get(lang, "progress_working");
+            _progressPercent.Foreground = percent >= 0 ? Theme.B("Yellow") : Theme.B("Muted");
             if (percent >= 0) { _progressTimer.Stop(); Bar(percent); }
             else { Bar(-1); _progressTimer.Start(); }
             try { _foot?.Invoke(_status.Text, "Muted"); } catch { }

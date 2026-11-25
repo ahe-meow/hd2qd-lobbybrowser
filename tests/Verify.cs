@@ -387,6 +387,9 @@ namespace Hd2Qd.Verify
             var offline = args.Contains("--offline");
             if (args.Contains("--window")) return ShowWindow(path, 55, "window.png");
             if (args.Contains("--progress")) return ShowWindow(path, 1.6, "progress.png");
+            var timed = args.FirstOrDefault(a => a.StartsWith("--progress=", StringComparison.Ordinal));
+            if (timed != null) return ShowWindow(path,
+                double.Parse(timed.Substring(11), System.Globalization.CultureInfo.InvariantCulture), "progress.png");
             if (args.Contains("--api")) return CheckApi(path);
             if (args.Contains("--helper")) return ProbeHelper(path, args[args.Length - 1]);
             if (args.Contains("--presets")) return ShowPresets(path);
