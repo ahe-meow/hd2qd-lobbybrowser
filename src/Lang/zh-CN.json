@@ -66,6 +66,8 @@
   "mission_pick": "按任务筛选",
   "filter_search": "搜索…",
   "filter_clear": "清空",
+  "filter_all": "全选",
+  "filter_invert": "反选",
   "filter_empty": "没有匹配项。",
   "planet_none": "读不到星球表。",
   "mission_none": "请先刷新：任务列表来自当前结果。",

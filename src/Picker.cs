@@ -23,8 +23,22 @@ namespace Hd2Qd.LobbyBrowser
             internal bool On;
         }
 
+        /// <summary>The search narrows what the bulk actions touch: a row hidden by the search
+        /// keeps its state, so "invert" after searching one front does not flip every planet.</summary>
+        internal static bool Matches(Item item, string needle) =>
+            string.IsNullOrEmpty(needle) ||
+            (item.Text ?? "").IndexOf(needle, StringComparison.CurrentCultureIgnoreCase) >= 0 ||
+            (item.Note ?? "").IndexOf(needle, StringComparison.CurrentCultureIgnoreCase) >= 0;
+
+        /// <summary>Select all matching rows, or flip them — the two buttons above the list.</summary>
+        internal static void Choose(List<Item> items, string needle, bool select)
+        {
+            foreach (var item in items)
+                if (Matches(item, needle)) item.On = select || !item.On;
+        }
+
         internal static void Show(FrameworkElement anchor, string title, string hint,
-            string clear, string empty, List<Item> items, Action changed)
+            string clear, string all, string invert, string empty, List<Item> items, Action changed)
         {
             var popup = new Popup
             {
@@ -47,9 +61,7 @@ namespace Hd2Qd.LobbyBrowser
                 var shown = 0;
                 foreach (var item in items)
                 {
-                    if (needle.Length > 0 &&
-                        item.Text.IndexOf(needle, StringComparison.CurrentCultureIgnoreCase) < 0 &&
-                        (item.Note ?? "").IndexOf(needle, StringComparison.CurrentCultureIgnoreCase) < 0) continue;
+                    if (!Matches(item, needle)) continue;
                     shown++;
                     var row = new Grid();
                     row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -91,7 +103,7 @@ namespace Hd2Qd.LobbyBrowser
             {
                 var chip = new CheckBox
                 {
-                    Content = group, Style = Theme.S("Chip"), Margin = new Thickness(0, 0, 6, 0),
+                    Content = group, Tag = group, Style = Theme.S("Chip"), Margin = new Thickness(0, 0, 6, 0),
                     IsChecked = items.Where(i => i.Group == group).All(i => i.On),
                 };
                 chip.Click += (s, e) =>
@@ -104,21 +116,29 @@ namespace Hd2Qd.LobbyBrowser
                 chips.Children.Add(chip);
             }
 
-            var head = new DockPanel { Margin = new Thickness(0, 0, 0, 0) };
-            var clearButton = new Button
+            void SyncChips()
             {
-                Content = clear, Style = Theme.S("Ghost"), MinHeight = 28, Padding = new Thickness(12, 0, 12, 0),
-                FontSize = 12, VerticalAlignment = VerticalAlignment.Center,
-            };
-            clearButton.Click += (s, e) =>
+                foreach (var chip in chips.Children.OfType<CheckBox>())
+                    chip.IsChecked = items.Where(i => i.Group == (string)chip.Tag).All(i => i.On);
+            }
+
+            var head = new DockPanel();
+            void AddAction(string label, Action act)
             {
-                foreach (var item in items) item.On = false;
-                foreach (var chip in chips.Children.OfType<CheckBox>()) chip.IsChecked = false;
-                changed();
-                Paint();
-            };
-            DockPanel.SetDock(clearButton, Dock.Right);
-            head.Children.Add(clearButton);
+                var button = new Button
+                {
+                    Content = label, Style = Theme.S("Ghost"), MinHeight = 26,
+                    Padding = new Thickness(8, 0, 8, 0), Margin = new Thickness(4, 0, 0, 0),
+                    FontSize = 12, VerticalAlignment = VerticalAlignment.Center,
+                };
+                button.Click += (s, e) => { act(); SyncChips(); changed(); Paint(); };
+                DockPanel.SetDock(button, Dock.Right);
+                head.Children.Add(button);
+            }
+            // docked right, so added right to left: 全选 反选 清空 read left to right
+            AddAction(clear, () => { foreach (var item in items) item.On = false; });
+            AddAction(invert, () => Choose(items, (search.Text ?? "").Trim(), false));
+            AddAction(all, () => Choose(items, (search.Text ?? "").Trim(), true));
             head.Children.Add(new TextBlock { Text = title, FontSize = 14, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
 
             var body = new StackPanel { Width = 330 };

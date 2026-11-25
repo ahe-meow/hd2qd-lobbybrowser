@@ -510,7 +510,8 @@ namespace Hd2Qd.LobbyBrowser
                 On = _planets.Contains(p.Index),
             }).ToList();
             Picker.Show(_planetButton, Words.Get(_lang, "planet_pick"), Words.Get(_lang, "filter_search"),
-                Words.Get(_lang, "filter_clear"), Words.Get(_lang, "filter_empty"), items, () =>
+                Words.Get(_lang, "filter_clear"), Words.Get(_lang, "filter_all"), Words.Get(_lang, "filter_invert"),
+                Words.Get(_lang, "filter_empty"), items, () =>
                 {
                     _planets.Clear();
                     foreach (var item in items.Where(i => i.On))
@@ -540,7 +541,8 @@ namespace Hd2Qd.LobbyBrowser
                 On = _missions.Contains(g.Key),
             }).ToList();
             Picker.Show(_missionButton, Words.Get(_lang, "mission_pick"), Words.Get(_lang, "filter_search"),
-                Words.Get(_lang, "filter_clear"), Words.Get(_lang, "filter_empty"), items, () =>
+                Words.Get(_lang, "filter_clear"), Words.Get(_lang, "filter_all"), Words.Get(_lang, "filter_invert"),
+                Words.Get(_lang, "filter_empty"), items, () =>
                 {
                     _missions.Clear();
                     foreach (var item in items.Where(i => i.On)) _missions.Add(item.Key);

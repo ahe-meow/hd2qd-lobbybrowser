@@ -118,6 +118,45 @@ namespace Hd2Qd.Verify
             }
         }
 
+        /// <summary>Select all and invert touch only the rows the search shows — inverting a
+        /// search for one item must not flip the rest. Both languages name the two buttons.</summary>
+        static void CheckPicker(Assembly asm)
+        {
+            try
+            {
+                var type = asm.GetType("Hd2Qd.LobbyBrowser.Picker");
+                var itemType = asm.GetType("Hd2Qd.LobbyBrowser.Picker+Item");
+                var words = asm.GetType("Hd2Qd.LobbyBrowser.Words");
+                if (type == null || itemType == null || words == null)
+                { Check("picker all and invert", false, "Picker/Item/Words missing"); return; }
+                var choose = type.GetMethod("Choose", BindingFlags.NonPublic | BindingFlags.Static);
+                var list = (System.Collections.IList)Activator.CreateInstance(
+                    typeof(List<>).MakeGenericType(itemType));
+                var on = itemType.GetField("On", BindingFlags.NonPublic | BindingFlags.Instance);
+                var text = itemType.GetField("Text", BindingFlags.NonPublic | BindingFlags.Instance);
+                foreach (var name in new[] { "West", "East", "North" })
+                {
+                    var item = Activator.CreateInstance(itemType, true);
+                    text.SetValue(item, name);
+                    list.Add(item);
+                }
+                choose.Invoke(null, new object[] { list, "", true });
+                var allOn = list.Cast<object>().All(i => (bool)on.GetValue(i));
+                choose.Invoke(null, new object[] { list, "east", false });
+                var values = list.Cast<object>().Select(i => (bool)on.GetValue(i)).ToArray();
+                var invert = values.SequenceEqual(new[] { true, false, true });
+                var get = words.GetMethod("Get", BindingFlags.Public | BindingFlags.Static);
+                var zh = (string)get.Invoke(null, new object[] { "zh-CN", "filter_all" });
+                var en = (string)get.Invoke(null, new object[] { "en", "filter_invert" });
+                Check("picker all and invert", allOn && invert && zh == "全选" && en == "Invert",
+                    "all=" + allOn + " invert=" + invert + " zh=" + zh + " en=" + en);
+            }
+            catch (Exception e)
+            {
+                Check("picker all and invert", false, (e.InnerException ?? e).Message);
+            }
+        }
+
         /// <summary>The language rule: a manager tag maps onto the two this plugin has, the
         /// player's choice is read from its own file and beats the manager's, and following
         /// reads the manager's gui.json as it stands.</summary>
@@ -227,6 +266,7 @@ namespace Hd2Qd.Verify
             Check("no other file needed beside it", beside.Length == 0, string.Join(", ", beside.Select(Path.GetFileName)));
 
             CheckPresets(asm);
+            CheckPicker(asm);
             CheckLanguage(asm);
 
             // ---- a live scan through the plugin's own command ----

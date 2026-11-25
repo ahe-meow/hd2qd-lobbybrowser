@@ -17,8 +17,9 @@ age. Every column but SOS sorts: click its name, click again to turn it round.
 The filter row is one line of three groups, a hairline between them: what opens something
 (Refresh, Planet, Difficulty, Mission, Presets), the three fronts as chips, and the four switches —
 each a short word on the row (Public, Session, Not full, SOS) with the whole sentence in its tip,
-so the row does not wrap into a ragged second line. A **planet** picked in the picker (search; a
-front's chip takes all of its planets) makes the scan ask Steam for exactly those planets; a
+so the row does not wrap into a ragged second line. A **planet** picked in the picker (search;
+**Select all** / **Invert** for the rows the search shows; a front's chip takes all of its planets)
+makes the scan ask Steam for exactly those planets; a
 **mission** filter narrows the results already in hand, so it costs no scan. **Presets** keep a set of all of that under a name (planets, fronts,
 difficulty, the switches, the missions, the sort) and put it back with one click; they live in
 `presets.json` in the plugin's folder in the manager's settings. Each name has its own line with
@@ -167,7 +168,7 @@ it. `tests\Verify.exe <dll>` checks it against the plugin contract of
 
 筛选行是一整行三组，组间一条细线：能展开的（刷新、星球、难度、任务、预设）、三条战线 chip、四个开关——
 开关在行内用短词（公开房 / 有会话 / 未满员 / SOS），完整含义放在悬停提示里，这样一行不会被挤成参差的第二行。
-**星球**选择器（可搜索，战线 chip 一键全选该战线）让扫描只向 Steam 要这些星球；**任务**筛选只作用于已有结果、
+**星球**选择器（可搜索，**全选 / 反选**只作用于搜索后可见的行，战线 chip 一键全选该战线）让扫描只向 Steam 要这些星球；**任务**筛选只作用于已有结果、
 不重新扫描。**预设**把这些条件
 （星球、战线、难度、开关、任务、排序）连同名字存起来，一键套回；存在管理器设置目录下插件自己的文件夹里的
 `presets.json`。每个名字独占一行，**载入**与**删除**就在同一行右侧——预设再多也只占“每套一行”，

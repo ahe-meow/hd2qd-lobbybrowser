@@ -67,6 +67,8 @@
   "mission_pick": "Filter by mission",
   "filter_search": "Search…",
   "filter_clear": "Clear",
+  "filter_all": "Select all",
+  "filter_invert": "Invert",
   "filter_empty": "Nothing matches.",
   "planet_none": "The planet table could not be read.",
   "mission_none": "Refresh first: the missions come from the current results.",
