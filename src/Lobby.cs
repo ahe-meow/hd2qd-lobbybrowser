@@ -22,6 +22,10 @@ namespace Hd2Qd.LobbyBrowser
         internal bool DifficultyGuess;
         internal string Front;
         internal string Region;
+        /// <summary>Host location published by the lobby as keys 22/23, longitude and latitude
+        /// in hundredths of a degree. This is what distinguishes rooms inside one region.</summary>
+        internal double Lat;
+        internal double Lon;
         internal string MissionHash;
         internal string Mission;
         internal string Host = "";
@@ -39,6 +43,9 @@ namespace Hd2Qd.LobbyBrowser
         /// <summary>This PC's latency to the lobby's region's Steam relay, in ms; null when the
         /// region is unknown or did not answer.</summary>
         internal int? Ping;
+        /// <summary>True when Ping came from the host-coordinate estimate rather than a direct
+        /// regional measurement; the column marks those with a leading "≈".</summary>
+        internal bool PingEstimated;
 
         // what the list shows, fixed in the manager's language when the window draws them
         public string PlanetText { get; set; }
@@ -55,7 +62,8 @@ namespace Hd2Qd.LobbyBrowser
         public string PlatformText { get; set; }
 
         /// <summary>The ping column's words: measured, or a dash when the region is unknown.</summary>
-        internal void ShowPing() => PingText = Ping.HasValue ? Ping.Value + " ms" : "—";
+        internal void ShowPing() => PingText = !Ping.HasValue ? "—"
+            : (PingEstimated ? "≈ " : "") + Ping.Value + " ms";
 
         internal void Dress(string lang)
         {
@@ -97,6 +105,8 @@ namespace Hd2Qd.LobbyBrowser
             ["guess"] = DifficultyGuess,
             ["front"] = Front ?? "",
             ["region"] = Region ?? "",
+            ["lat"] = Lat,
+            ["lon"] = Lon,
             ["missionHash"] = MissionHash ?? "",
             ["mission"] = Mission ?? "",
             ["host"] = Host ?? "",
@@ -122,6 +132,8 @@ namespace Hd2Qd.LobbyBrowser
             room.DifficultyGuess = Flag(d, "guess");
             room.Front = Text(d, "front");
             room.Region = Text(d, "region");
+            room.Lat = Decimal(d, "lat");
+            room.Lon = Decimal(d, "lon");
             room.MissionHash = Text(d, "missionHash");
             room.Mission = Text(d, "mission");
             room.Host = Text(d, "host");
@@ -137,6 +149,10 @@ namespace Hd2Qd.LobbyBrowser
 
         static int Number(Dictionary<string, object> d, string key, int fallback) =>
             d.TryGetValue(key, out var v) && v != null ? Convert.ToInt32(v, CultureInfo.InvariantCulture) : fallback;
+
+        static double Decimal(Dictionary<string, object> d, string key) =>
+            d.TryGetValue(key, out var v) && v != null && double.TryParse(Convert.ToString(v, CultureInfo.InvariantCulture),
+                NumberStyles.Float, CultureInfo.InvariantCulture, out var value) ? value : 0;
 
         static bool Flag(Dictionary<string, object> d, string key) =>
             d.TryGetValue(key, out var v) && v is bool b && b;

@@ -33,14 +33,22 @@ invitation path (`+connect_lobby` is the argument Helldivers 2's launch options 
 game first and joining afterwards does **not** work — the client then believes a game already runs
 and hands the lobby to the running-game callback, in a process whose Steamworks has not started.
 
-The ping column is this PC's latency to the **Steam relay of the lobby's region** — the closest
-node there, as **Steam itself measures it**. The short-lived scan helper calls Steamworks
-`ISteamNetworkingUtils` (`InitRelayNetworkAccess`, `GetDirectPingToPOP` / `GetPingToDataCenter`,
-`GetPOPList`) while its Steam session is up and brings the result back with the scan. These are
-Steam's real measurements to its relay network: a local TCP handshake or an accelerator that
-accepts connections locally cannot fake a 0/1 ms value here. A lobby never publishes its own
-address, so the region is still the closest a client can get; this is not a reading of the game
-process's own connection object.
+The ping column is **per room**, marked `≈`. A lobby publishes its host's location as keys 22/23
+(longitude and latitude in hundredths of a degree — `-12230/3754` is San Francisco, `11415/2224`
+Shenzhen), so rooms in the same region but in different cities can be told apart. The number is an
+**estimate from that published coordinate and this PC's location**: Steam's own measured latency
+to the region's closest relay is the anchor, and the estimate grows with the distance between the
+two. Hosts whose published coordinates coincide legitimately show the same number — the lobby does
+not publish a host IP, so this is not a measured round trip to the host and never pretends to be.
+
+The short-lived scan helper calls Steamworks `ISteamNetworkingUtils` (`InitRelayNetworkAccess`,
+`GetDirectPingToPOP` / `GetPingToDataCenter`, `GetPOPList`) while its Steam session is up and brings
+the regional measurements back with the scan. A local TCP handshake or an accelerator accepting
+connections locally cannot fake a 0/1 ms value here. This PC's location comes from one cached
+lookup (`ipinfo.io`, then `ipwho.is`) in `location.json`, refreshed at most weekly; if neither
+answers, the column falls back to the plain measured regional value. An accelerator that changes
+your public exit IP can skew the estimate — the `≈` is the reminder that it is a geographic
+estimate, not an observed connection.
 
 Regions Steam did not measure fall back to the original's method: ICMP to `sdr_pops.json` nodes,
 from the manager, cached five minutes. If a game accelerator's virtual adapter is up (奇游 or any
@@ -136,13 +144,16 @@ Steam's own banner.
 - **Writes:** all in `%USERPROFILE%\.hd2-mod-cli\lobbybrowser\`: `HD2QD.LobbyBrowser.Helper.<version>.exe`,
   written from the DLL's own resource and replaced when the plugin updates; `presets.json`, the
   presets the player saved; `planets.json`, the last planet table and any rate-limit cooldown;
-  `platforms.json`, the host platforms PlayFab named, with when it named them; `language.txt`, the
-  window's language when it was set to something other than HD2QD's (no file: follow). No log.
+  `platforms.json`, the host platforms PlayFab named, with when it named them; `location.json`,
+  this PC's approximate latitude/longitude for the room estimates, looked up at most weekly;
+  `language.txt`, the window's language when it was set to something other than HD2QD's (no file:
+  follow). No log.
 - **Contacts:** the Steam client on this PC (local); `https://api.helldivers2.dev/api/v1/planets`
   for the planet table (once per five minutes, with the identifying headers that API asks for);
   PlayFab's `974a9` title (`https://974a9.playfabapi.com`) for host platforms, signed in with the
-  Steam ticket, one profile request a crossplay host; Steam's relay network itself, for its own
-  POP ping measurements; and the relay IPs in `sdr_pops.json`, reached by ICMP as a fallback.
+  Steam ticket, one profile request a crossplay host; `ipinfo.io` (then `ipwho.is`) for this PC's
+  approximate location, once a week; Steam's relay network itself, for its own POP ping
+  measurements; and the relay IPs in `sdr_pops.json`, reached by ICMP as a fallback.
 
 ## Not ported
 
@@ -191,11 +202,17 @@ it. `tests\Verify.exe <dll>` checks it against the plugin contract of
 的邀请流程（`+connect_lobby` 也是社区用来跳过《绝地潜兵2》过场动画的启动参数）。**先启动游戏再发 join 是行不通的**：
 客户端会以为游戏已在运行，改走“运行中游戏回调”，而那个进程的 Steamworks 还没起来，请求就丢了。
 
-延迟是该区域 **Steam 中继**的延迟（该区域最优节点）。现在优先采用 **Steam 自己测的延迟**：
+延迟列现在是**每个房间一个值**，带 `≈` 标记。大厅把房主位置写在键 22/23 里（经度、纬度 ×100，
+`-12230/3754` 是旧金山，`11415/2224` 是深圳），所以同一区域、不同城市的房间能区分开。
+显示的数字是**根据这个房主坐标和本机位置推算的**：以 Steam 实测的该区域最近中继延迟为基准，
+按两地距离增减。房主公布的坐标相同，数值自然相同——大厅不公布房主 IP，这不是到房主的实测往返，
+`≈` 就是"地理估算"的标记，不冒充实测值。
+
 短命的扫描 helper 在 Steam 会话仍开着时调用 Steamworks `ISteamNetworkingUtils`
-（`InitRelayNetworkAccess`、`GetDirectPingToPOP` / `GetPingToDataCenter`、`GetPOPList`），把结果随扫描结果带回。
-这是 Steam 到其中继网络的真实测量，本地 TCP 握手或加速器在本地先 accept 连接都造不出 0/1ms 的假值。
-大厅从不公布自己的地址，因此显示的仍是区域中继延迟，不是游戏进程内部连接的读数。
+（`InitRelayNetworkAccess`、`GetDirectPingToPOP` / `GetPingToDataCenter`、`GetPOPList`），把区域实测值随扫描结果带回。
+本地 TCP 握手或加速器在本地先 accept 连接都造不出 0/1ms 的假值。本机位置来自每周最多一次的缓存查询
+（`ipinfo.io`，失败则 `ipwho.is`），存在 `location.json`；两个服务都不可用时退回纯区域实测值。
+如果加速器改变了你的公网出口 IP，估算会偏移——`≈` 就是提醒。
 
 Steam 没测到的区域才回退到原项目的办法：对 `sdr_pops.json` 节点做 ICMP 探测，缓存五分钟，在管理器进程里进行。
 如果检测到加速器（奇游或其他 TUN/TAP）的**虚拟网卡**已启用，这个兜底探测会以该网卡的地址为源地址发出，
@@ -267,11 +284,13 @@ Steam 自己那串 breakpad 文本。
   Steam 的公开大厅列表与大厅数据。不读游戏进程、不读内存、不改游戏文件。
 - **写**：都在管理器设置目录 `%USERPROFILE%\.hd2-mod-cli\lobbybrowser` 下：`HD2QD.LobbyBrowser.Helper.<版本>.exe`
   （来自 DLL 内嵌资源，升级时替换）、`presets.json`（玩家保存的预设）、`planets.json`（上次的星球表与限流冷却）、
-  `platforms.json`（PlayFab 给出的房主平台及时间）、`language.txt`（本窗口的语言，跟随管理器时不写）。不写日志。
+  `platforms.json`（PlayFab 给出的房主平台及时间）、`location.json`（本机大致经纬度，用于房间延迟估算，
+  每周最多查一次）、`language.txt`（本窗口的语言，跟随管理器时不写）。不写日志。
 - **联网**：本机 Steam 客户端（本地）；`https://api.helldivers2.dev/api/v1/planets`（星球表，最多每五分钟一次，
   带该接口要求的标识头）；PlayFab 的 `974a9` 标题（`https://974a9.playfabapi.com`）查房主平台——用 Steam 票据
-  登录，每个跨平台房主一次资料请求；Steam 中继网络本身（Steam 自测各 POP 的延迟）；以及 `sdr_pops.json`
-  里的中继 IP——仅在 Steam 未提供测量时用 ICMP 兜底。
+  登录，每个跨平台房主一次资料请求；`ipinfo.io`（失败则 `ipwho.is`）查本机大致位置，每周最多一次；
+  Steam 中继网络本身（Steam 自测各 POP 的延迟）；以及 `sdr_pops.json` 里的中继 IP——仅在 Steam
+  未提供测量时用 ICMP 兜底。
 
 ## 未移植
 

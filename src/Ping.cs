@@ -33,6 +33,8 @@ namespace Hd2Qd.LobbyBrowser
         static readonly object Gate = new object();
         static readonly Dictionary<string, KeyValuePair<DateTime, int?>> Cache = new Dictionary<string, KeyValuePair<DateTime, int?>>();
         static Dictionary<string, List<string>> _nodes;
+        static Dictionary<string, double[]> _geo = new Dictionary<string, double[]>();  // POP code -> lat/lon
+        static Dictionary<string, string> _popRegion = new Dictionary<string, string>(); // POP code -> region
 
         [DllImport("iphlpapi.dll", SetLastError = true)]
         static extern IntPtr IcmpCreateFile();
@@ -108,8 +110,20 @@ namespace Hd2Qd.LobbyBrowser
                         var addresses = new List<string>();
                         if (pair.Value is System.Collections.IList list)
                             foreach (var node in list)
-                                if (node is Dictionary<string, object> d && d.TryGetValue("ip", out var ip) && ip is string s)
-                                    addresses.Add(s);
+                            {
+                                if (!(node is Dictionary<string, object> d)) continue;
+                                if (d.TryGetValue("ip", out var ip) && ip is string s) addresses.Add(s);
+                                if (d.TryGetValue("id", out var code) && code is string id
+                                    && d.TryGetValue("lat", out var la) && d.TryGetValue("lon", out var lo))
+                                {
+                                    _geo[id] = new[]
+                                    {
+                                        Convert.ToDouble(la, CultureInfo.InvariantCulture),
+                                        Convert.ToDouble(lo, CultureInfo.InvariantCulture),
+                                    };
+                                    _popRegion[id] = pair.Key.ToUpperInvariant();
+                                }
+                            }
                         if (addresses.Count > 0) _nodes[pair.Key.ToUpperInvariant()] = addresses;
                     }
                 }
@@ -167,6 +181,41 @@ namespace Hd2Qd.LobbyBrowser
                 }
             });
             return result;
+        }
+
+        /// <summary>A room's own latency estimate, in ms, from the host coordinates the lobby
+        /// publishes (keys 22/23) and this PC's location. Steam's measured latency to the
+        /// region's closest relay is the anchor: a host sitting at that relay gets exactly that
+        /// number, a host farther away gets proportionally more. Null when either coordinate set
+        /// or the regional measurement is missing — the caller then uses the measured value.
+        ///
+        /// This is an estimate, not a round trip to the host: the lobby never publishes a host
+        /// address. Rooms whose published coordinates coincide legitimately get the same number.</summary>
+        internal static int? Estimate(Room room, IDictionary<string, int> steamPings, double[] me)
+        {
+            if (room == null || me == null || steamPings == null) return null;
+            var region = (room.Region ?? "").Trim().ToUpperInvariant();
+            if (region == "" || !steamPings.TryGetValue(region, out var anchor) || anchor <= 0) return null;
+            Nodes();                                  // fills the POP coordinate table too
+            var reference = double.MaxValue;
+            foreach (var pair in _geo)
+                if (!_popRegion.TryGetValue(pair.Key, out var own) || own == region)
+                    reference = Math.Min(reference, Distance(me[0], me[1], pair.Value[0], pair.Value[1]));
+            if (reference <= 0 || reference == double.MaxValue) return null;
+            if (room.Lat == 0 && room.Lon == 0) return anchor;
+            var slope = Math.Max(0.01, Math.Min(0.2, anchor / reference));   // ms per km
+            var ms = anchor + slope * (Distance(me[0], me[1], room.Lat, room.Lon) - reference);
+            return (int)Math.Round(Math.Max(1, Math.Min(999, ms)), MidpointRounding.AwayFromZero);
+        }
+
+        static double Distance(double lat1, double lon1, double lat2, double lon2)
+        {
+            const double Rad = Math.PI / 180;
+            var a = Math.Sin((lat2 - lat1) * Rad / 2);
+            a *= a;
+            var b = Math.Cos(lat1 * Rad) * Math.Cos(lat2 * Rad);
+            var c = Math.Sin((lon2 - lon1) * Rad / 2);
+            return 12742 * Math.Asin(Math.Sqrt(a + b * c * c));   // Earth diameter, km
         }
 
         static int? Measure(string region)

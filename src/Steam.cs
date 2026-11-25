@@ -488,6 +488,12 @@ namespace Hd2Qd.LobbyBrowser
             room.DifficultyGuess = difficulty == 0 && room.Difficulty > 0;
 
             room.Region = Data(lobby, "21");
+            // keys 22/23 are the host's published longitude/latitude in hundredths of a degree
+            // (-12230/3754 is San Francisco, 11415/2224 Shenzhen). The region is only a continent;
+            // these are what let rooms in one region get different latency estimates.
+            int hundredths;
+            if (int.TryParse(Data(lobby, "22"), out hundredths)) room.Lon = hundredths / 100.0;
+            if (int.TryParse(Data(lobby, "23"), out hundredths)) room.Lat = hundredths / 100.0;
             room.Sos = Data(lobby, "8") == "1";
             var privacy = Data(lobby, "19");
             int p;

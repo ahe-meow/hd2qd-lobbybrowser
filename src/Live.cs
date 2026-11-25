@@ -32,6 +32,7 @@ namespace Hd2Qd.LobbyBrowser
         static readonly JavaScriptSerializer Json = new JavaScriptSerializer { MaxJsonLength = int.MaxValue };
         static Dictionary<int, int> _counts = new Dictionary<int, int>();
         static Dictionary<int, string> _fronts = new Dictionary<int, string>();
+        static double[] _here;                       // this PC's latitude/longitude, for per-room estimates
         static DateTime _at = DateTime.MinValue;
         static DateTime _until = DateTime.MinValue;
         static bool _loaded;
@@ -56,6 +57,75 @@ namespace Hd2Qd.LobbyBrowser
                     Fetch(home, lang, out note);
                 }
                 return Choose(fronts, difficulty);
+            }
+        }
+
+        /// <summary>Where this PC is, as [latitude, longitude]. One lookup per week, cached beside
+        /// the other tables; null when neither service answered. Used only to turn the host
+        /// coordinates the lobby publishes into per-room latency estimates — no host IP exists in
+        /// lobby data, so this is an estimate, never a measured round trip to the host.</summary>
+        internal static double[] Where(string home)
+        {
+            lock (Gate)
+            {
+                if (_here != null) return _here;
+                var path = Path.Combine(Path.GetDirectoryName(FileOf(home)), "location.json");
+                try
+                {
+                    if (File.Exists(path))
+                    {
+                        var saved = Json.Deserialize<Dictionary<string, object>>(File.ReadAllText(path));
+                        if (saved != null && saved.TryGetValue("lat", out var a) && saved.TryGetValue("lon", out var b))
+                        {
+                            var lat = Convert.ToDouble(a, CultureInfo.InvariantCulture);
+                            var lon = Convert.ToDouble(b, CultureInfo.InvariantCulture);
+                            if (Math.Abs(lat) <= 90 && Math.Abs(lon) <= 180) return _here = new[] { lat, lon };
+                        }
+                    }
+                }
+                catch { }
+                foreach (var url in new[] { "https://ipinfo.io/json", "https://ipwho.is/" })
+                    try
+                    {
+                        var request = (HttpWebRequest)WebRequest.Create(url);
+                        request.Timeout = 5000;
+                        request.ReadWriteTimeout = 5000;
+                        request.UserAgent = Client;
+                        using (var response = (HttpWebResponse)request.GetResponse())
+                        using (var reader = new StreamReader(response.GetResponseStream()))
+                        {
+                            var data = Json.Deserialize<Dictionary<string, object>>(reader.ReadToEnd());
+                            double lat, lon;
+                            if (data == null) continue;
+                            if (data.TryGetValue("loc", out var loc))
+                            {
+                                var parts = Convert.ToString(loc).Split(',');
+                                if (parts.Length != 2 || !double.TryParse(parts[0], NumberStyles.Float,
+                                        CultureInfo.InvariantCulture, out lat) || !double.TryParse(parts[1],
+                                        NumberStyles.Float, CultureInfo.InvariantCulture, out lon)) continue;
+                            }
+                            else if (data.TryGetValue("latitude", out var a) && data.TryGetValue("longitude", out var b))
+                            {
+                                lat = Convert.ToDouble(a, CultureInfo.InvariantCulture);
+                                lon = Convert.ToDouble(b, CultureInfo.InvariantCulture);
+                            }
+                            else continue;
+                            if (Math.Abs(lat) > 90 || Math.Abs(lon) > 180) continue;
+                            _here = new[] { lat, lon };
+                            try
+                            {
+                                Directory.CreateDirectory(Path.GetDirectoryName(path));
+                                File.WriteAllText(path, Json.Serialize(new Dictionary<string, object>
+                                {
+                                    ["lat"] = lat, ["lon"] = lon, ["at"] = DateTime.UtcNow.Ticks,
+                                }));
+                            }
+                            catch { }
+                            return _here;
+                        }
+                    }
+                    catch { }
+                return null;
             }
         }
 

@@ -82,7 +82,7 @@ namespace Hd2Qd.LobbyBrowser
         enum Sort { Planet, Front, Diff, Members, Mission, Privacy, Platform, Region, Ping, Host, Age }
 
         // the table's columns, in the same stars in the header and in every row
-        static readonly double[] Columns = { 1.45, 0.8, 0.65, 0.6, 1.4, 0.55, 0.55, 0.6, 0.36, 0.5, 0.95, 0.5 };
+        static readonly double[] Columns = { 1.4, 0.8, 0.65, 0.6, 1.35, 0.55, 0.55, 0.6, 0.36, 0.68, 0.95, 0.5 };
         static readonly string[] Heads = { "col_planet", "col_front", "col_diff", "col_members", "col_mission", "col_priv", "col_platform", "col_region", "col_sos", "col_ping", "col_host", "col_age" };
         static readonly bool[] AlignRight = { false, false, false, true, false, false, false, false, false, true, false, true };
         static readonly bool[] Numeric = { false, false, false, true, false, false, false, false, false, true, false, true };
@@ -813,8 +813,10 @@ namespace Hd2Qd.LobbyBrowser
             MeasurePings(lang);
         }
 
-        /// <summary>The ping column: Steam's own relay latencies came back with the scan; only
-        /// regions it did not measure are probed by ICMP here. The rows are sorted again after.</summary>
+        /// <summary>The ping column: each room gets an estimate from the host coordinates the
+        /// lobby publishes, anchored on Steam's measured latency to that region's relay. Rooms
+        /// without coordinates keep the measured regional value; regions Steam missed are probed
+        /// by ICMP. The rows are sorted again after.</summary>
         void MeasurePings(string lang)
         {
             var regions = _rooms.Select(r => r.Region).Where(r => !string.IsNullOrEmpty(r)).Distinct().ToList();
@@ -826,13 +828,19 @@ namespace Hd2Qd.LobbyBrowser
             }
             var round = ++_pingRound;
             var dispatcher = _shell.Host != null ? _shell.Host.Dispatcher : Dispatcher.CurrentDispatcher;
-            Task.Run(() => Ping.Regions(regions, _steamPings)).ContinueWith(task => dispatcher.BeginInvoke((Action)(() =>
+            Task.Run(() => Tuple.Create(Ping.Regions(regions, _steamPings), Live.Where(_home)))
+                .ContinueWith(task => dispatcher.BeginInvoke((Action)(() =>
             {
                 if (round != _pingRound || task.IsFaulted) return;
+                var byRegion = task.Result.Item1;
+                var here = task.Result.Item2;
                 foreach (var room in _rooms)
                 {
                     int? value;
-                    room.Ping = room.Region != null && task.Result.TryGetValue(room.Region.ToUpperInvariant(), out value) ? value : null;
+                    var estimate = Ping.Estimate(room, _steamPings, here);
+                    room.PingEstimated = estimate.HasValue;
+                    room.Ping = estimate ?? (room.Region != null && byRegion.TryGetValue(room.Region.ToUpperInvariant(), out value)
+                        ? value : (int?)null);
                     room.ShowPing();
                 }
                 ShowRows();

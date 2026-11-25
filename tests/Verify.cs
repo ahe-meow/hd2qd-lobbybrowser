@@ -249,6 +249,56 @@ namespace Hd2Qd.Verify
             }
         }
 
+        /// <summary>Rooms in one region must not all show the same latency when the lobby
+        /// publishes different host coordinates. The estimate is anchored on Steam's measured
+        /// regional value and grows with distance from this PC; it is marked with "≈" because no
+        /// lobby publishes a host IP, so it is not a measured round trip.</summary>
+        static void CheckRoomEstimates(Assembly asm)
+        {
+            var flags = BindingFlags.NonPublic | BindingFlags.Static;
+            try
+            {
+                var roomType = asm.GetType("Hd2Qd.LobbyBrowser.Room");
+                var pingType = asm.GetType("Hd2Qd.LobbyBrowser.Ping");
+                var fromJson = roomType != null ? roomType.GetMethod("FromJson", flags) : null;
+                var estimate = pingType != null ? pingType.GetMethod("Estimate", flags) : null;
+                if (fromJson == null || estimate == null)
+                { Check("room ping estimates follow host coordinates", false, "Room.FromJson/Ping.Estimate missing"); return; }
+                var lat = roomType.GetField("Lat", BindingFlags.NonPublic | BindingFlags.Instance);
+                var lon = roomType.GetField("Lon", BindingFlags.NonPublic | BindingFlags.Instance);
+                Func<double, double, object> make = (a, b) => fromJson.Invoke(null, new object[]
+                {
+                    new Dictionary<string, object> { ["region"] = "AS", ["lat"] = a, ["lon"] = b },
+                });
+                var shenzhen = make(22.24, 114.15);
+                var guangzhou = make(23.12, 113.23);
+                var beijing = make(39.90, 116.40);
+                var parsed = Math.Abs((double)lat.GetValue(shenzhen) - 22.24) < 0.01
+                    && Math.Abs((double)lon.GetValue(shenzhen) - 114.15) < 0.01;
+                var pings = new Dictionary<string, int> { ["AS"] = 27 };
+                var here = new double[] { 28.20, 112.97 };      // Changsha
+                var s = (int)estimate.Invoke(null, new object[] { shenzhen, pings, here });
+                var g = (int)estimate.Invoke(null, new object[] { guangzhou, pings, here });
+                var b = (int)estimate.Invoke(null, new object[] { beijing, pings, here });
+                Check("room ping estimates follow host coordinates", parsed && s != g && g < s && s < b,
+                    "parsed=" + parsed + " GZ=" + g + " SZ=" + s + " BJ=" + b);
+
+                var field = roomType.GetField("Ping", BindingFlags.NonPublic | BindingFlags.Instance);
+                var marker = roomType.GetField("PingEstimated", BindingFlags.NonPublic | BindingFlags.Instance);
+                var show = roomType.GetMethod("ShowPing", BindingFlags.NonPublic | BindingFlags.Instance);
+                var text = roomType.GetProperty("PingText", BindingFlags.Public | BindingFlags.Instance);
+                field.SetValue(shenzhen, (int?)s);
+                marker.SetValue(shenzhen, true);
+                show.Invoke(shenzhen, null);
+                var label = (string)text.GetValue(shenzhen, null);
+                Check("estimated ping is marked", label != null && label.StartsWith("≈"), label ?? "null");
+            }
+            catch (Exception e)
+            {
+                Check("room ping estimates follow host coordinates", false, (e.InnerException ?? e).Message);
+            }
+        }
+
         /// <summary>The language rule: a manager tag maps onto the two this plugin has, the
         /// player's choice is read from its own file and beats the manager's, and following
         /// reads the manager's gui.json as it stands.</summary>
@@ -361,6 +411,7 @@ namespace Hd2Qd.Verify
             CheckPicker(asm);
             CheckPingRoute(asm);
             CheckSteamPings(asm);
+            CheckRoomEstimates(asm);
             CheckLanguage(asm);
 
             // ---- a live scan through the plugin's own command ----
