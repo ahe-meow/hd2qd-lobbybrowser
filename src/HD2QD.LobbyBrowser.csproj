@@ -16,7 +16,7 @@
     <Nullable>disable</Nullable>
     <AssemblyName>HD2QD.LobbyBrowser</AssemblyName>
     <RootNamespace>Hd2Qd.LobbyBrowser</RootNamespace>
-    <Version>1.7.0</Version>
+    <Version>1.7.1</Version>
     <Product>HD2QD Lobby Browser</Product>
     <Company>ahe-meow</Company>
     <Copyright>MIT License</Copyright>
@@ -56,6 +56,9 @@
          compiled into a window of its own (hence out of Page). -->
     <Page Remove="Ui.xaml" />
     <EmbeddedResource Include="Ui.xaml" LogicalName="Ui.xaml" />
+    <!-- the plugin's own icon: the manager reads a manifest resource named exactly "app.ico"
+         for the 20x20 picture on the plugin's card (HD2QD core/Plugins.cs, IconBytes) -->
+    <EmbeddedResource Include="app.ico" LogicalName="app.ico" />
     <Reference Include="System.Web.Extensions" />
   </ItemGroup>
 

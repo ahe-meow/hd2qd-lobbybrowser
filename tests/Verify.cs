@@ -212,6 +212,13 @@ namespace Hd2Qd.Verify
             foreach (var r in new[] { "Lang.en.json", "Lang.zh-CN.json", "Data.planets.json", "Data.mission_names.json" })
                 Check("resource " + r, resources.Contains(r), string.Join(", ", resources));
 
+            // the manager reads a manifest resource named exactly "app.ico" for the card's icon
+            var icon = resources.Contains("app.ico") ? asm.GetManifestResourceStream("app.ico") : null;
+            var header = new byte[4];
+            var read = icon != null ? icon.Read(header, 0, 4) : 0;
+            Check("icon app.ico is an ICO", read == 4 && header[0] == 0 && header[1] == 0 && header[2] == 1 && header[3] == 0,
+                read == 4 ? string.Join(" ", header) : "missing");
+
             // ---- dependencies: the framework and nothing else ----
             var outside = asm.GetReferencedAssemblies().Select(a => a.Name).Where(n => !Framework.Contains(n)).ToArray();
             Check("references the framework only", outside.Length == 0, string.Join(", ", outside));
