@@ -55,7 +55,16 @@ namespace Hd2Qd.LobbyBrowser
 
         internal FrameworkElement Root => _root;
 
-        internal Window Host { get; set; }
+        Window _window;
+        internal Window Host
+        {
+            get => _window;
+            set
+            {
+                _window = value;
+                if (value != null) value.Closed += (s, e) => _page?.Stop();
+            }
+        }
 
         internal void Refresh() => _page.Refresh();
 
@@ -71,6 +80,7 @@ namespace Hd2Qd.LobbyBrowser
 
         void Show(LobbyPage.State state)
         {
+            _page?.Stop();
             _root.Children.Clear();
             _page = new LobbyPage(Lang, _host, this, state);
             _root.Children.Add(_page.Root);
@@ -107,6 +117,10 @@ namespace Hd2Qd.LobbyBrowser
         readonly DispatcherTimer _progressTimer = new DispatcherTimer(DispatcherPriority.Render)
         {
             Interval = TimeSpan.FromMilliseconds(16),
+        };
+        readonly DispatcherTimer _ageTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromSeconds(5),
         };
         double _progressPhase;
         readonly TextBlock _empty = new TextBlock
@@ -159,6 +173,8 @@ namespace Hd2Qd.LobbyBrowser
                 VerticalAlignment = VerticalAlignment.Bottom, Visibility = Visibility.Collapsed,
             };
             _progressTimer.Tick += (s, e) => { _progressPhase = (_progressPhase + 0.7) % 70; Bar(-1); };
+            _ageTimer.Tick += (s, e) => { foreach (var room in _rooms) room.RefreshAge(); };
+            _ageTimer.Start();
             _home = host != null && host.TryGetValue("home", out var home) ? home as string : null;
             _foot = host != null && host.TryGetValue("foot", out var foot) ? foot as Action<string, string> : null;
             _askText = host != null && host.TryGetValue("ask_text", out var ask) ? ask as Func<string, string, string, string> : null;
@@ -275,7 +291,11 @@ namespace Hd2Qd.LobbyBrowser
             Root = root;
 
             BuildHeader();
-            if (state != null) Restore(state);
+            if (state != null)
+            {
+                Restore(state);
+                foreach (var room in _rooms) room.Dress(lang);   // a language switch rebuilds the body
+            }
             _empty.Text = Words.Get(lang, "empty");
             _empty.Visibility = Visibility.Collapsed;
             ShowRows();
@@ -765,6 +785,13 @@ namespace Hd2Qd.LobbyBrowser
             _empty.Text = Words.Get(_lang, "empty");
             _empty.Visibility = rooms.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
             _join.IsEnabled = false;
+        }
+
+        /// <summary>Stop both timers when the window closes or the body is rebuilt.</summary>
+        internal void Stop()
+        {
+            _progressTimer.Stop();
+            _ageTimer.Stop();
         }
 
         void SetStatus(string text)

@@ -333,6 +333,42 @@ namespace Hd2Qd.Verify
             }
         }
 
+        /// <summary>The age column keeps a Unix creation timestamp and recomputes against the
+        /// current clock; only the one bound cell changes, so no table refresh is involved.</summary>
+        static void CheckAge(Assembly asm)
+        {
+            var type = asm.GetType("Hd2Qd.LobbyBrowser.Room");
+            var flags = BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public;
+            var created = type != null ? type.GetField("Created", flags) : null;
+            var refresh = type != null ? type.GetMethod("RefreshAge", flags) : null;
+            var dress = type != null ? type.GetMethod("Dress", flags) : null;
+            var prop = type != null ? type.GetProperty("AgeText") : null;
+            var notifies = type != null && type.GetInterfaces().Any(i => i.Name == "INotifyPropertyChanged");
+            if (created == null || refresh == null || dress == null || prop == null || !notifies)
+            {
+                Check("age follows the current clock", false, "Room lacks a notifying age");
+                return;
+            }
+            var room = Activator.CreateInstance(type, true);
+            dress.Invoke(room, new object[] { "zh-CN" });
+            var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            created.SetValue(room, now - 30);
+            refresh.Invoke(room, null);
+            var lt1 = (string)prop.GetValue(room, null);
+            created.SetValue(room, now - 720);
+            refresh.Invoke(room, null);
+            var min = (string)prop.GetValue(room, null);
+            created.SetValue(room, now - 1200);
+            refresh.Invoke(room, null);
+            var gt = (string)prop.GetValue(room, null);
+            created.SetValue(room, -1L);
+            refresh.Invoke(room, null);
+            var unknown = (string)prop.GetValue(room, null);
+            Check("age follows the current clock",
+                lt1 == "<1分钟" && min == "12分钟前" && gt == ">15分钟" && unknown == "未知",
+                lt1 + " / " + min + " / " + gt + " / " + unknown);
+        }
+
         /// <summary>The language rule: a manager tag maps onto the two this plugin has, the
         /// player's choice is read from its own file and beats the manager's, and following
         /// reads the manager's gui.json as it stands.</summary>
@@ -451,6 +487,7 @@ namespace Hd2Qd.Verify
             CheckSteamPings(asm);
             CheckRoomEstimates(asm);
             CheckProgress(asm);
+            CheckAge(asm);
             CheckLanguage(asm);
 
             // ---- a live scan through the plugin's own command ----

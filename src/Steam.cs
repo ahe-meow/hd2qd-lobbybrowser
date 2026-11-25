@@ -502,10 +502,12 @@ namespace Hd2Qd.LobbyBrowser
             room.Limit = _limit(_matchmaking, lobby);
             var created = Data(lobby, "18");
             long at;
-            if (long.TryParse(created, out at) && at > 1500000000)
+            if (long.TryParse(created, out at) && at > 1500000000 && at <= now + 60)
             {
-                var age = now - at;
-                if (age >= 0 && age <= 172800) room.Age = age;
+                // keep the absolute timestamp: the manager recomputes the age against its own
+                // clock, so the column keeps moving while the window stays open
+                room.Created = at;
+                room.Age = now - at;
             }
             // key 3 is the host's Steam ID only while the lobby is not crossplay: with crossplay
             // off it is a PlayFab entity id, which a join URL cannot name (JoinLink.Url falls back

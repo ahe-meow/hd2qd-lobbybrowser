@@ -14,6 +14,10 @@ the lobby keys and the name tables are that program's, ported to a manager plugi
 One row per public lobby: planet, front, difficulty, players, mission, region, SOS, **ping**, host,
 age. Every column but SOS sorts: click its name, click again to turn it round.
 
+The age column uses the lobby's own creation timestamp and keeps up with the clock while the
+window is open: `<1 min`, `N min ago` up to 15, `>15 min` after that, or `Unknown` when Steam
+publishes no usable time.
+
 The filter row is one line of three groups, a hairline between them: what opens something
 (Refresh, Planet, Difficulty, Mission, Presets), the three fronts as chips, and the four switches —
 each a short word on the row (Public, Session, Not full, SOS) with the whole sentence in its tip,
@@ -194,6 +198,9 @@ it. `tests\Verify.exe <dll>` checks it against the plugin contract of
 
 每个公开大厅一行：星球、战线、难度、人数、任务、地区、SOS、**延迟**、房主、建立时间。除 SOS 外每一列
 都可排序：点列名升序，再点一次反向。
+
+建立时间取自大厅自己公布的创建时间戳，窗口开着时会跟着实际时间走：不足 1 分钟显示 `<1分钟`，
+1–15 分钟显示如 `12分钟前`，超过 15 分钟显示 `>15分钟`，Steam 没给出可用时间则显示 `未知`。
 
 筛选行是一整行三组，组间一条细线：能展开的（刷新、星球、难度、任务、预设）、三条战线 chip、四个开关——
 开关在行内用短词（公开房 / 有会话 / 未满员 / SOS），完整含义放在悬停提示里，这样一行不会被挤成参差的第二行。

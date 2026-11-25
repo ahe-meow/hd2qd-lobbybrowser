@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Globalization;
 
 namespace Hd2Qd.LobbyBrowser
@@ -8,8 +9,10 @@ namespace Hd2Qd.LobbyBrowser
     /// 12 planet, 17 difficulty, 21 region, 19 privacy, 10 mission packet, 8 SOS, 18 created,
     /// 3 host, 16 front). It travels between the helper process and this one as a dictionary of
     /// strings and numbers (ToJson/FromJson).</summary>
-    internal sealed class Room
+    internal sealed class Room : INotifyPropertyChanged
     {
+        public event PropertyChangedEventHandler PropertyChanged;
+
         internal ulong Lobby;
         internal string HostId = "";
         internal int Planet = -1;
@@ -29,6 +32,9 @@ namespace Hd2Qd.LobbyBrowser
         internal string MissionHash;
         internal string Mission;
         internal string Host = "";
+        /// <summary>Unix seconds from Steam's lobby key 18. Kept absolute so the age can be
+        /// recomputed against the current clock; -1 when Steam did not publish a usable time.</summary>
+        internal long Created = -1;
         internal long Age = -1;
 
         /// <summary>A crossplay lobby names its host by PlayFab entity id (lobby key 3, decimal,
@@ -55,7 +61,18 @@ namespace Hd2Qd.LobbyBrowser
         public string MissionText { get; set; }
         public string RegionText { get; set; }
         public string HostText { get; set; }
-        public string AgeText { get; set; }
+        string _ageText;
+        string _lang;
+        public string AgeText
+        {
+            get => _ageText;
+            set
+            {
+                if (_ageText == value) return;
+                _ageText = value;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs("AgeText"));
+            }
+        }
         public string SosText { get; set; }
         public string PingText { get; set; }
         public string PrivacyText { get; set; }
@@ -67,6 +84,7 @@ namespace Hd2Qd.LobbyBrowser
 
         internal void Dress(string lang)
         {
+            _lang = lang;
             PlanetText = Planet > 0 ? Tables.Planet(Planet, lang) : Words.Get(lang, "no_planet");
             FrontText = Tables.FrontShort(Front, lang);
             DifficultyText = Difficulty > 0 ? Words.F(lang, "diff_n", Difficulty) : "—";
@@ -84,11 +102,34 @@ namespace Hd2Qd.LobbyBrowser
                 : Platform == "psn" ? Words.Get(lang, "plat_psn")
                 : Platform == "xbox" ? Words.Get(lang, "plat_xbox")
                 : "—";
-            if (Age < 0) AgeText = "";
-            else if (Age < 60) AgeText = Words.Get(lang, "age_new");
-            else if (Age < 3600) AgeText = Words.F(lang, "age_s", Age / 60);
-            else if (Age < 86400) AgeText = Words.F(lang, "age_m", Age / 3600);
-            else AgeText = Words.F(lang, "age_h", Age / 86400);
+            RefreshAge();
+        }
+
+        /// <summary>Recompute the age column against the current clock. Only AgeText changes, so
+        /// the list's existing binding updates that one cell without redrawing the table.</summary>
+        internal void RefreshAge()
+        {
+            var lang = _lang ?? "en";
+            if (Created <= 0)
+            {
+                Age = -1;
+                AgeText = Words.Get(lang, "age_unknown");
+                return;
+            }
+            var seconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - Created;
+            if (seconds < 0)
+            {
+                Age = -1;
+                AgeText = Words.Get(lang, "age_unknown");
+                return;
+            }
+            Age = seconds;
+            if (seconds < 60) AgeText = Words.Get(lang, "age_lt1");
+            else
+            {
+                var minutes = seconds / 60;
+                AgeText = minutes <= 15 ? Words.F(lang, "age_min", minutes) : Words.Get(lang, "age_gt15");
+            }
         }
 
         internal Dictionary<string, object> ToJson() => new Dictionary<string, object>
@@ -111,6 +152,7 @@ namespace Hd2Qd.LobbyBrowser
             ["mission"] = Mission ?? "",
             ["host"] = Host ?? "",
             ["age"] = Age,
+            ["created"] = Created,
             ["hostEntity"] = HostEntity ?? "",
             ["platform"] = Platform ?? "",
         };
@@ -138,6 +180,7 @@ namespace Hd2Qd.LobbyBrowser
             room.Mission = Text(d, "mission");
             room.Host = Text(d, "host");
             room.Age = Number(d, "age", -1);
+            room.Created = Long(d, "created", -1);
             room.HostEntity = Text(d, "hostEntity");
             room.Platform = Text(d, "platform");
             room.Ping = null;                 // measured by the window, not carried by the scan
@@ -150,6 +193,9 @@ namespace Hd2Qd.LobbyBrowser
 
         static int Number(Dictionary<string, object> d, string key, int fallback) =>
             d.TryGetValue(key, out var v) && v != null ? Convert.ToInt32(v, CultureInfo.InvariantCulture) : fallback;
+
+        static long Long(Dictionary<string, object> d, string key, long fallback) =>
+            d.TryGetValue(key, out var v) && v != null ? Convert.ToInt64(v, CultureInfo.InvariantCulture) : fallback;
 
         static double Decimal(Dictionary<string, object> d, string key) =>
             d.TryGetValue(key, out var v) && v != null && double.TryParse(Convert.ToString(v, CultureInfo.InvariantCulture),
