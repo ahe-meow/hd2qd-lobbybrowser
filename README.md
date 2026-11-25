@@ -174,9 +174,9 @@ Steam's own banner.
 
 ## Not ported
 
-Presets' single-slot behaviour (this keeps several, named), the lobby level column, the "unjoinable
-lobby" blacklist, the global hotkey and the program's own updater: the manager runs the plugin, so
-the plugin updates with the manager and the DLL.
+Presets' single-slot behaviour (this keeps several, named), the "unjoinable lobby" blacklist, the
+global hotkey and the program's own updater: the manager runs the plugin, so the plugin updates with
+the manager and the DLL.
 
 ## Build
 
@@ -326,7 +326,7 @@ Steam 自己那串 breakpad 文本。
 
 ## 未移植
 
-预设的“只存一套”行为（这里存多套并各自命名）、大厅等级列、“进不去的房”黑名单、全局热键、程序自身的更新器：
+预设的“只存一套”行为（这里存多套并各自命名）、“进不去的房”黑名单、全局热键、程序自身的更新器：
 插件由管理器加载，随管理器与 DLL 更新。
 
 ## 构建
