@@ -1,0 +1,67 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The lobby browser as a program of its own. It compiles the very same sources as the plugin
+       (src\*.cs) and embeds the same resources, so the window is byte-for-byte the same body; only
+       the frame differs. Here the frame is drawn in WPF from Theme's colours, with no Windows
+       title bar or border: WindowStyle=None and a caption/edge built from the manager's parts. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <PlatformTarget>x64</PlatformTarget>
+    <AssemblyName>HD2QD.LobbyBrowser</AssemblyName>
+    <RootNamespace>Hd2Qd.LobbyBrowser</RootNamespace>
+    <Version>1.8.7</Version>
+    <Product>HD2QD Lobby Browser</Product>
+    <Company>ahe-meow</Company>
+    <Copyright>MIT License</Copyright>
+    <Deterministic>true</Deterministic>
+    <DebugType>none</DebugType>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <ApplicationIcon>..\src\app.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+    <Reference Include="System.Web.Extensions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="..\src\BrowserWindow.cs" Link="BrowserWindow.cs" />
+    <Compile Include="..\src\Helper.cs" Link="Helper.cs" />
+    <Compile Include="..\src\Live.cs" Link="Live.cs" />
+    <Compile Include="..\src\Language.cs" Link="Language.cs" />
+    <Compile Include="..\src\Lobby.cs" Link="Lobby.cs" />
+    <Compile Include="..\src\Picker.cs" Link="Picker.cs" />
+    <Compile Include="..\src\Ping.cs" Link="Ping.cs" />
+    <Compile Include="..\src\Presets.cs" Link="Presets.cs" />
+    <Compile Include="..\src\PresetView.cs" Link="PresetView.cs" />
+    <Compile Include="..\src\Plugin.cs" Link="Plugin.cs" />
+    <Compile Include="..\src\Tables.cs" Link="Tables.cs" />
+    <Compile Include="..\src\Theme.cs" Link="Theme.cs" />
+    <Compile Include="..\src\Words.cs" Link="Words.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="..\src\Lang\*.json" LogicalName="Lang.%(Filename).json" />
+    <EmbeddedResource Include="..\src\Data\*.json" LogicalName="Data.%(Filename).json" />
+    <EmbeddedResource Include="..\src\Ui.xaml" LogicalName="Ui.xaml" />
+    <EmbeddedResource Include="..\src\app.ico" LogicalName="app.ico" />
+  </ItemGroup>
+
+  <!-- the same helper the plugin uses: Steam gets its own short-lived process, this program does
+       not become the game. Rebuilt first by the project reference, then carried inside the exe. -->
+  <ItemGroup>
+    <ProjectReference Include="..\helper\HD2QD.LobbyBrowser.Helper.csproj">
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <Private>false</Private>
+    </ProjectReference>
+    <EmbeddedResource Include="..\helper\bin\$(Configuration)\net48\HD2QD.LobbyBrowser.Helper.exe">
+      <LogicalName>HD2QD.LobbyBrowser.Helper.exe</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
+</Project>

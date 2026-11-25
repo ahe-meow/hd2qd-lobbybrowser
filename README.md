@@ -114,6 +114,13 @@ be read, the scan falls back to one worldwide list.
 
 ## Install
 
+**On its own:** take `HD2QD.LobbyBrowser.exe` from a release and run it. One file, no HD2QD, no
+DLL beside it. The caption and edge are drawn by the program in the same theme as the plugin —
+there is no Windows title bar or status bar. It opens the same window, reads the same settings
+(`%LOCALAPPDATA%\HD2QD.LobbyBrowser`), and follows the Windows display language.
+
+**As a plugin:**
+
 1. Build it (below) or take `HD2QD.LobbyBrowser.dll` from a release.
 2. In HD2 Mod Quick Deploy: **Plugins** page (the jigsaw piece beside the gear) → **Add plugin…**,
    or `hd2qd plugin-add <file>`.
@@ -177,8 +184,10 @@ the plugin updates with the manager and the DLL.
 build.bat            :: or: dotnet build src\HD2QD.LobbyBrowser.csproj -c Release
 ```
 
-`release\HD2QD.LobbyBrowser.dll` is the plugin: one file, .NET Framework 4.8, no other file beside
-it. `tests\Verify.exe <dll>` checks it against the plugin contract of
+`release\HD2QD.LobbyBrowser.dll` is the plugin and `release\HD2QD.LobbyBrowser.exe` is the same
+window as a standalone program: both one file, .NET Framework 4.8, nothing beside them. Both
+embed the helper and write it out on first scan. `tests\Verify.exe <dll>` checks the DLL against
+the plugin contract of
 [docs/plugin-authors.md](https://github.com/ahe-meow/hd2qd-plugins/blob/main/docs/plugin-authors.md);
 `--offline` skips the live scan, `--window` opens the window and writes `window.png`.
 
@@ -268,6 +277,12 @@ Steam 没测到的区域才回退到原项目的办法：对 `sdr_pops.json` 节
 
 ## 安装
 
+**独立运行：**从 release 取 `HD2QD.LobbyBrowser.exe` 直接运行。单文件，不需要管理器、旁边不需要
+DLL。标题栏和边框由程序按插件同款主题自绘，没有 Windows 原生标题栏和状态栏；界面与插件完全相同，
+共用同一份设置（`%LOCALAPPDATA%\HD2QD.LobbyBrowser`），随 Windows 显示语言切换中英文。
+
+**作为插件：**
+
 1. 自行构建（见下），或从 release 取 `HD2QD.LobbyBrowser.dll`。
 2. 在 HD2 Mod Quick Deploy 的**插件**页（齿轮旁的拼图按钮）点“添加插件…”，或
    `hd2qd plugin-add <文件>`。
@@ -320,7 +335,8 @@ Steam 自己那串 breakpad 文本。
 build.bat            :: 或：dotnet build src\HD2QD.LobbyBrowser.csproj -c Release
 ```
 
-`release\HD2QD.LobbyBrowser.dll` 即插件：单文件、.NET Framework 4.8，旁边不需要任何其他文件。
+`release\HD2QD.LobbyBrowser.dll` 是插件，`release\HD2QD.LobbyBrowser.exe` 是同一窗口的独立程序：
+两者均为单文件、.NET Framework 4.8，旁边不需要任何其他文件，都内嵌助手程序并在首次扫描时释放。
 `tests\Verify.exe <dll>` 按
 [docs/plugin-authors.md](https://github.com/ahe-meow/hd2qd-plugins/blob/main/docs/plugin-authors.md)
 检查契约；`--offline` 跳过真实扫描，`--window` 打开窗口并写出 `window.png`。
