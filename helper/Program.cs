@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
@@ -102,12 +103,15 @@ namespace Hd2Qd.LobbyBrowser
                         if (!client.ConnectAsync(ip, port).Wait(900)) continue;
                         if (!client.Connected) continue;
                         clock.Stop();
-                        // A name-based accelerator can accept the connect locally in well under a
-                        // millisecond, before it has opened the remote leg. That is not a round
-                        // trip: a whole-millisecond reading of zero is an invalid answer, not a
-                        // 0 ms route. Try the next port; the caller falls back to ICMP if all fail.
-                        if (clock.ElapsedMilliseconds < 1) continue;
-                        return (int)Math.Min(int.MaxValue, clock.ElapsedMilliseconds);
+                        // A name-based accelerator may accept the connect on a local loopback
+                        // endpoint, or in about a millisecond, before the remote leg exists.
+                        // Neither is a round trip to a Steam relay: a public relay cannot answer
+                        // from this PC in 1-4 ms. Discard both and let the caller fall back to
+                        // the real ICMP route instead of showing a plausible-looking fake value.
+                        var remote = client.Client.RemoteEndPoint as IPEndPoint;
+                        if (remote != null && IPAddress.IsLoopback(remote.Address)) continue;
+                        if (clock.Elapsed.TotalMilliseconds < 5) continue;
+                        return (int)Math.Min(int.MaxValue, Math.Ceiling(clock.Elapsed.TotalMilliseconds));
                     }
                 }
                 catch
