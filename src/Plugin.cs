@@ -37,7 +37,7 @@ namespace Hd2Qd.LobbyBrowser
             var lang = Words.Lang(host) ?? "en";
             var home = host != null && host.TryGetValue("home", out var h) ? h as string : null;
             var filters = new Filters();
-            var result = Helper.Scan(home, filters, lang, null);
+            var result = Helper.Scan(home, filters, lang, null, null);
             if (result.Error != null)
             {
                 output.WriteLine(result.Error);

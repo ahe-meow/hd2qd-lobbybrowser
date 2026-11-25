@@ -299,6 +299,40 @@ namespace Hd2Qd.Verify
             }
         }
 
+        /// <summary>The progress bar must never invent a number: only the planet stage carries a
+        /// counter. Both languages name every stage, and the helper carries the stage messages.</summary>
+        static void CheckProgress(Assembly asm)
+        {
+            var flags = BindingFlags.NonPublic | BindingFlags.Static;
+            try
+            {
+                var words = asm.GetType("Hd2Qd.LobbyBrowser.Words");
+                var get = words != null ? words.GetMethod("Get", BindingFlags.Public | BindingFlags.Static) : null;
+                var keys = new[]
+                {
+                    "stage_planets", "stage_steam", "stage_scan", "stage_rooms", "stage_platforms",
+                    "stage_pings", "progress_working", "detail_planets", "detail_steam",
+                    "detail_scan", "detail_scan_more", "detail_rooms", "detail_platforms", "detail_pings",
+                };
+                if (get == null) { Check("progress stages are translated", false, "Words.Get missing"); return; }
+                var missing = keys.Where(k => (string)get.Invoke(null, new object[] { "zh-CN", k }) == k
+                    || (string)get.Invoke(null, new object[] { "en", k }) == k).ToArray();
+                Check("progress stages are translated", missing.Length == 0, string.Join(",", missing));
+
+                var helper = asm.GetType("Hd2Qd.LobbyBrowser.Helper");
+                var scan = helper != null ? helper.GetMethod("Scan", flags) : null;
+                var symbols = System.Text.Encoding.Unicode.GetString(File.ReadAllBytes(
+                    Path.Combine(Path.GetDirectoryName(asm.Location), "HD2QD.LobbyBrowser.dll")));
+                Check("helper carries stage events", scan != null && scan.GetParameters().Length == 5
+                    && symbols.Contains("stage"),
+                    "params=" + (scan == null ? -1 : scan.GetParameters().Length));
+            }
+            catch (Exception e)
+            {
+                Check("progress stages are translated", false, (e.InnerException ?? e).Message);
+            }
+        }
+
         /// <summary>The language rule: a manager tag maps onto the two this plugin has, the
         /// player's choice is read from its own file and beats the manager's, and following
         /// reads the manager's gui.json as it stands.</summary>
@@ -351,7 +385,8 @@ namespace Hd2Qd.Verify
         {
             var path = Path.GetFullPath(args.Length > 0 ? args[0] : "release/HD2QD.LobbyBrowser.dll");
             var offline = args.Contains("--offline");
-            if (args.Contains("--window")) return ShowWindow(path);
+            if (args.Contains("--window")) return ShowWindow(path, 55, "window.png");
+            if (args.Contains("--progress")) return ShowWindow(path, 1.6, "progress.png");
             if (args.Contains("--api")) return CheckApi(path);
             if (args.Contains("--helper")) return ProbeHelper(path, args[args.Length - 1]);
             if (args.Contains("--presets")) return ShowPresets(path);
@@ -412,6 +447,7 @@ namespace Hd2Qd.Verify
             CheckPingRoute(asm);
             CheckSteamPings(asm);
             CheckRoomEstimates(asm);
+            CheckProgress(asm);
             CheckLanguage(asm);
 
             // ---- a live scan through the plugin's own command ----
@@ -551,7 +587,7 @@ namespace Hd2Qd.Verify
             return 0;
         }
 
-        static int ShowWindow(string path)
+        static int ShowWindow(string path, double seconds, string file)
         {
             var asm = Assembly.LoadFrom(path);
             var plugin = asm.GetType("Hd2Qd.LobbyBrowser.Plugin");
@@ -602,7 +638,7 @@ namespace Hd2Qd.Verify
                 Console.WriteLine("FAIL  Open() threw: " + (e.InnerException ?? e).Message);
                 return 1;
             }
-            var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(55) };
+            var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(seconds) };
             timer.Tick += (s, e) =>
             {
                 timer.Stop();
@@ -630,9 +666,9 @@ namespace Hd2Qd.Verify
                 bitmap.Render(content);
                 var encoder = new PngBitmapEncoder();
                 encoder.Frames.Add(BitmapFrame.Create(bitmap));
-                var file = Path.Combine(Directory.GetCurrentDirectory(), "window.png");
-                using (var stream = File.Create(file)) encoder.Save(stream);
-                Console.WriteLine("PASS  window rendered to " + file + " (" + width + "x" + height + ")");
+                var shot = Path.Combine(Directory.GetCurrentDirectory(), file);
+                using (var stream = File.Create(shot)) encoder.Save(stream);
+                Console.WriteLine("PASS  window rendered to " + shot + " (" + width + "x" + height + ")");
                 app.Shutdown();
             };
             timer.Start();

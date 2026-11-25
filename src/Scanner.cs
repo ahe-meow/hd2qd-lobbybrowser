@@ -20,7 +20,7 @@ namespace Hd2Qd.LobbyBrowser
         const int MaxRooms = 900;
         const int SplitAt = 50;           // Steam's hard limit per request
 
-        internal static ScanResult Scan(Filters filters, string lang, Action<int, int> progress)
+        internal static ScanResult Scan(Filters filters, string lang, Action<string> stage, Action<int, int> progress)
         {
             var result = new ScanResult();
             // the planets are named by the caller (the manager reads the game's own table, with
@@ -45,6 +45,7 @@ namespace Hd2Qd.LobbyBrowser
             var seen = new HashSet<ulong>();
             var ids = new List<ulong>();
             var done = 0;
+            stage?.Invoke("scan");
             foreach (var planet in targets)
             {
                 progress?.Invoke(++done, targets.Count);
@@ -59,6 +60,7 @@ namespace Hd2Qd.LobbyBrowser
                 if (ids.Count >= MaxRooms) break;
             }
 
+            stage?.Invoke("rooms");
             steam.AskData(ids);
             var now = (int)DateTimeOffset.UtcNow.ToUnixTimeSeconds();
             var rooms = new List<Room>(ids.Count);

@@ -33,14 +33,17 @@ namespace Hd2Qd.LobbyBrowser
                 // said at once: a process that stops here was ended from outside (Steam's Stop),
                 // which is not the same as one that never started
                 Say(new Dictionary<string, object> { ["ready"] = 1 });
-                var result = Scanner.Scan(filters, lang, (done, total) =>
-                    Console.Out.WriteLine("{\"progress\":[" + done + "," + total + "]}"));
+                var result = Scanner.Scan(filters, lang,
+                    stage => Say(new Dictionary<string, object> { ["stage"] = stage }),
+                    (done, total) => Console.Out.WriteLine("{\"progress\":[" + done + "," + total + "]}"));
 
                 // both the PlayFab ticket and Steam's own relay measurements need the session:
                 // take them now, then close Steam so the seconds it counts as game time stay short
                 var ticket = Steam.Ticket();
+                Say(new Dictionary<string, object> { ["stage"] = "pings" });
                 var pings = Steam.RegionPings();
                 Steam.Stop();
+                Say(new Dictionary<string, object> { ["stage"] = "platforms" });
                 Platforms.Enrich(result.Rooms, ticket, home);
 
                 Say(new Dictionary<string, object>

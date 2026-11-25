@@ -94,6 +94,23 @@ namespace Hd2Qd.LobbyBrowser
         readonly ListBox _list = new ListBox();
         readonly Grid _head = new Grid { Height = 34, Margin = new Thickness(16, 0, 26, 0) };
         readonly TextBlock _status = new TextBlock { FontSize = 12, Foreground = Theme.B("Muted"), VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+        readonly TextBlock _progressDetail = new TextBlock
+        {
+            FontSize = 12, Foreground = Theme.B("Muted"), TextTrimming = TextTrimming.CharacterEllipsis,
+            Visibility = Visibility.Collapsed,
+        };
+        readonly TextBlock _progressPercent = new TextBlock
+        {
+            FontSize = 12, Foreground = Theme.B("Muted"), TextAlignment = TextAlignment.Right,
+            MinWidth = 46, VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed,
+        };
+        readonly Border _progressTrack;
+        readonly Border _progressFill = new Border { Background = Theme.B("Yellow"), CornerRadius = new CornerRadius(2) };
+        readonly ColumnDefinition _progressBefore = new ColumnDefinition();
+        readonly ColumnDefinition _progressBar = new ColumnDefinition();
+        readonly ColumnDefinition _progressAfter = new ColumnDefinition();
+        readonly DispatcherTimer _progressTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(90) };
+        double _progressPhase;
         readonly TextBlock _empty = new TextBlock
         {
             FontSize = 13, Foreground = Theme.B("Muted"), HorizontalAlignment = HorizontalAlignment.Center,
@@ -129,6 +146,20 @@ namespace Hd2Qd.LobbyBrowser
         {
             _lang = lang;
             _shell = shell;
+            var meter = new Grid();
+            meter.ColumnDefinitions.Add(_progressBefore);
+            meter.ColumnDefinitions.Add(_progressBar);
+            meter.ColumnDefinitions.Add(_progressAfter);
+            Grid.SetColumn(_progressFill, 1);
+            meter.Children.Add(_progressFill);
+            _progressTrack = new Border
+            {
+                Height = 4, Width = 180, Margin = new Thickness(12, 0, 10, 0),
+                Background = Theme.B("Grid"), CornerRadius = new CornerRadius(2),
+                ClipToBounds = true, Child = meter, VerticalAlignment = VerticalAlignment.Center,
+                Visibility = Visibility.Collapsed,
+            };
+            _progressTimer.Tick += (s, e) => { _progressPhase = (_progressPhase + 4) % 70; Bar(-1); };
             _home = host != null && host.TryGetValue("home", out var home) ? home as string : null;
             _foot = host != null && host.TryGetValue("foot", out var foot) ? foot as Action<string, string> : null;
             _askText = host != null && host.TryGetValue("ask_text", out var ask) ? ask as Func<string, string, string, string> : null;
@@ -203,10 +234,22 @@ namespace Hd2Qd.LobbyBrowser
             table.Children.Add(body);
             var card = Theme.Card(table, 0);
 
-            var bottom = new DockPanel { Margin = new Thickness(0, 12, 0, 0) };
+            var line = new DockPanel();
             DockPanel.SetDock(_join, Dock.Right);
-            bottom.Children.Add(_join);
-            bottom.Children.Add(_status);
+            DockPanel.SetDock(_progressPercent, Dock.Right);
+            DockPanel.SetDock(_progressTrack, Dock.Right);
+            line.Children.Add(_join);
+            line.Children.Add(_progressPercent);
+            line.Children.Add(_progressTrack);
+            line.Children.Add(_status);
+            var bottom = new Grid { Margin = new Thickness(0, 12, 0, 0) };
+            bottom.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            bottom.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            Grid.SetRow(line, 0);
+            _progressDetail.Margin = new Thickness(0, 5, 140, 0);
+            Grid.SetRow(_progressDetail, 1);
+            bottom.Children.Add(line);
+            bottom.Children.Add(_progressDetail);
 
             var root = new Grid { Margin = new Thickness(20, 18, 20, 16), MinWidth = 1120, MinHeight = 560, Background = Theme.B("Ground900") };
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -727,8 +770,79 @@ namespace Hd2Qd.LobbyBrowser
 
         void SetStatus(string text)
         {
+            _progressTimer.Stop();
+            _progressTrack.Visibility = Visibility.Collapsed;
+            _progressPercent.Visibility = Visibility.Collapsed;
+            _progressDetail.Visibility = Visibility.Collapsed;
             _status.Text = text;
             try { _foot?.Invoke(text, "Muted"); } catch { }   // the manager's own status bar
+        }
+
+        /// <summary>A determinate slice, or a moving one when the stage has no real counter. The
+        /// three star columns keep the bar correct at any window width.</summary>
+        void Bar(double percent)
+        {
+            if (percent >= 0)
+            {
+                _progressBefore.Width = new GridLength(0, GridUnitType.Star);
+                _progressBar.Width = new GridLength(Math.Max(1, percent), GridUnitType.Star);
+                _progressAfter.Width = new GridLength(Math.Max(0, 100 - Math.Max(1, percent)), GridUnitType.Star);
+                _progressFill.Opacity = 1;
+            }
+            else
+            {
+                _progressBefore.Width = new GridLength(_progressPhase, GridUnitType.Star);
+                _progressBar.Width = new GridLength(30, GridUnitType.Star);
+                _progressAfter.Width = new GridLength(70 - _progressPhase, GridUnitType.Star);
+                _progressFill.Opacity = 0.75;
+            }
+        }
+
+        /// <summary>One line of stage and percent, one line of what is actually happening. Only
+        /// the planet stage has a real counter; every other stage uses a moving bar and says so,
+        /// rather than inventing a percentage the scan cannot know.</summary>
+        void SetProgress(string stage, int done, int total, List<int> planets, string lang)
+        {
+            _progressTrack.Visibility = Visibility.Visible;
+            _progressPercent.Visibility = Visibility.Visible;
+            _progressDetail.Visibility = Visibility.Visible;
+            var percent = -1.0;
+            string detail;
+            switch (stage)
+            {
+                case "steam":
+                    _status.Text = Words.Get(lang, "stage_steam");
+                    detail = Words.Get(lang, "detail_steam");
+                    break;
+                case "scan":
+                    _status.Text = Words.F(lang, "stage_scan", done, total);
+                    detail = planets != null && done > 0 && done <= planets.Count && planets[done - 1] > 0
+                        ? Words.F(lang, "detail_scan", Tables.Planet(planets[done - 1], lang))
+                        : Words.Get(lang, "detail_scan_more");
+                    if (total > 0) percent = 100.0 * done / total;
+                    break;
+                case "rooms":
+                    _status.Text = Words.Get(lang, "stage_rooms");
+                    detail = Words.Get(lang, "detail_rooms");
+                    break;
+                case "pings":
+                    _status.Text = Words.Get(lang, "stage_pings");
+                    detail = Words.Get(lang, "detail_pings");
+                    break;
+                case "platforms":
+                    _status.Text = Words.Get(lang, "stage_platforms");
+                    detail = Words.Get(lang, "detail_platforms");
+                    break;
+                default:
+                    _status.Text = Words.Get(lang, "stage_planets");
+                    detail = Words.Get(lang, "detail_planets");
+                    break;
+            }
+            _progressDetail.Text = detail;
+            _progressPercent.Text = percent >= 0 ? Math.Round(percent) + "%" : Words.Get(lang, "progress_working");
+            if (percent >= 0) { _progressTimer.Stop(); Bar(percent); }
+            else { Bar(-1); _progressTimer.Start(); }
+            try { _foot?.Invoke(_status.Text, "Muted"); } catch { }
         }
 
         Filters Read()
@@ -754,9 +868,9 @@ namespace Hd2Qd.LobbyBrowser
             if (_busy) return;
             _busy = true;
             _refresh.IsEnabled = false;
-            SetStatus(Words.Get(_lang, "scanning"));
-            var filters = Read();
             var lang = _lang;
+            SetProgress("planets", 0, 0, null, lang);
+            var filters = Read();
             var manual = _planets.Count > 0;
             var fronts = filters.Fronts.ToList();
             var difficulty = _difficultyValue;
@@ -771,8 +885,11 @@ namespace Hd2Qd.LobbyBrowser
                     var targets = Live.Pick(fronts, difficulty, _home, lang, out note);
                     filters.Planets.AddRange(targets);
                 }
-                var result = Helper.Scan(_home, filters, lang, (done, total) =>
-                    dispatcher.BeginInvoke((Action)(() => SetStatus(Words.F(lang, "scanning_planets", total)))));
+                var planets = filters.Planets.Distinct().Take(20).ToList();
+                dispatcher.BeginInvoke((Action)(() => SetProgress("steam", 0, 0, planets, lang)));
+                var result = Helper.Scan(_home, filters, lang,
+                    stage => dispatcher.BeginInvoke((Action)(() => SetProgress(stage, 0, 0, planets, lang))),
+                    (done, total) => dispatcher.BeginInvoke((Action)(() => SetProgress("scan", done, total, planets, lang))));
                 return Tuple.Create(result, note);
             }).ContinueWith(task => dispatcher.BeginInvoke((Action)(() => Finish(task, lang))));
         }

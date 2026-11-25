@@ -26,6 +26,12 @@ difficulty, the switches, the missions, the sort) and put it back with one click
 **Load** and **Delete** beside it, so a long list costs one line a preset — a card of the manager's,
 not a menu item per action.
 
+**Refresh** shows its progress in the bottom bar on two lines: the stage with a real percentage
+and a thin bar for the planet scan, and underneath what is actually happening ("Now: Mars · Steam
+is returning the lobby list"). Only the planet scan has a real counter; reading the planet table,
+opening Steam, parsing lobbies, the PlayFab lookup and the latency measurement show a moving bar
+and *Working* instead of an invented percentage.
+
 **Join** — bottom right, or a double-click, or Enter — opens
 `steam://joinlobby/553850/<lobby>/<host>` and nothing else. When the game is closed, Steam itself
 starts it with `+connect_lobby <lobby>` and the game joins as it boots; that is Valve's own
@@ -196,6 +202,10 @@ it. `tests\Verify.exe <dll>` checks it against the plugin contract of
 （星球、战线、难度、开关、任务、排序）连同名字存起来，一键套回；存在管理器设置目录下插件自己的文件夹里的
 `presets.json`。每个名字独占一行，**载入**与**删除**就在同一行右侧——预设再多也只占“每套一行”，
 不随动作数量翻倍。
+
+**刷新**时在底部状态栏显示两行进度：第一行是当前阶段、真实百分比和细进度条（星球扫描阶段），
+第二行是正在做的事（例如"当前：玛尔特 · Steam 正在返回房间列表"）。只有星球扫描有真实计数；
+读取星球表、连接 Steam、解析房间、查询房主平台、测量延迟这些阶段显示流动条和"进行中"，不编造百分比。
 
 **加入**在右下角（也可双击行、回车）：只做一件事——打开 `steam://joinlobby/553850/<大厅>/<房主>`。
 游戏没运行时，Steam 自己会用 `+connect_lobby <大厅>` 启动游戏，游戏启动过程中直接进房；这正是 Valve 文档里

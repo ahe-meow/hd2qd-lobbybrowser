@@ -141,6 +141,7 @@ namespace Hd2Qd.LobbyBrowser
             room.HostEntity = Text(d, "hostEntity");
             room.Platform = Text(d, "platform");
             room.Ping = null;                 // measured by the window, not carried by the scan
+            room.PingEstimated = false;       // ditto: the manager decides which number to show
             return room;
         }
 

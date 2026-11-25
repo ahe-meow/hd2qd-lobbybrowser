@@ -26,7 +26,8 @@ namespace Hd2Qd.LobbyBrowser
         const int TimeoutSeconds = 180;
         static readonly JavaScriptSerializer Json = new JavaScriptSerializer { MaxJsonLength = int.MaxValue };
 
-        internal static ScanResult Scan(string home, Filters filters, string lang, Action<int, int> progress)
+        internal static ScanResult Scan(string home, Filters filters, string lang,
+            Action<string> stage, Action<int, int> progress)
         {
             var result = new ScanResult();
             string exe;
@@ -94,6 +95,11 @@ namespace Hd2Qd.LobbyBrowser
                     if (message.ContainsKey("ready"))
                     {
                         progressed = true;                  // it is up; what follows is the scan
+                    }
+                    else if (message.TryGetValue("stage", out var where) && where != null && stage != null)
+                    {
+                        progressed = true;
+                        stage(Convert.ToString(where));
                     }
                     else if (message.TryGetValue("progress", out var p) && p is System.Collections.IList pair && pair.Count == 2)
                     {
