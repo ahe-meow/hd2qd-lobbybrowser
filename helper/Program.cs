@@ -1,6 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using System.Net.Sockets;
 using System.Text;
+using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 
 namespace Hd2Qd.LobbyBrowser
@@ -26,6 +30,21 @@ namespace Hd2Qd.LobbyBrowser
                 var request = Json.Deserialize<Dictionary<string, object>>(Console.In.ReadToEnd());
                 var lang = request != null && request.TryGetValue("lang", out var l) ? l as string : "en";
                 var home = request != null && request.TryGetValue("home", out var h) ? h as string : null;
+
+                // A Winsock-only probe, asked for by Ping when the player enabled the disguised
+                // helper. No Steamworks here: the only reason for this process to carry the
+                // game's file name is an accelerator that routes by executable name.
+                if (request != null && request.TryGetValue("winsock", out var targets) && targets is System.Collections.IList list)
+                {
+                    var answers = new Dictionary<string, object>();
+                    Parallel.ForEach(list.Cast<object>().Select(Convert.ToString).Distinct(), ip =>
+                    {
+                        lock (answers) answers[ip] = Rtt(ip);
+                    });
+                    Say(new Dictionary<string, object> { ["winsock"] = answers });
+                    return 0;
+                }
+
                 var filters = request != null && request.TryGetValue("filters", out var f) && f is Dictionary<string, object> d
                     ? Filters.FromJson(d)
                     : new Filters();
@@ -65,6 +84,33 @@ namespace Hd2Qd.LobbyBrowser
             {
                 Steam.Stop();     // SteamAPI_Shutdown, so the Steam client sees this process go
             }
+        }
+
+        /// <summary>Time to a TCP handshake, in ms; a closed port answers with RST just as fast,
+        /// so any of these ports gives the route's round trip. Winsock (not ICMP) is what a
+        /// process-based accelerator hooks.</summary>
+        static int? Rtt(string ip)
+        {
+            if (string.IsNullOrEmpty(ip)) return null;
+            foreach (var port in new[] { 443, 80, 27015 })
+            {
+                try
+                {
+                    var clock = Stopwatch.StartNew();
+                    using (var client = new TcpClient())
+                    {
+                        if (!client.ConnectAsync(ip, port).Wait(900)) continue;
+                        if (!client.Connected) continue;
+                        clock.Stop();
+                        return (int)Math.Min(int.MaxValue, clock.ElapsedMilliseconds);
+                    }
+                }
+                catch
+                {
+                    // refused or timed out: try the next port
+                }
+            }
+            return null;
         }
 
         static void Say(Dictionary<string, object> message)

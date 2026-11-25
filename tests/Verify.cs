@@ -171,6 +171,32 @@ namespace Hd2Qd.Verify
                 "qiyou=" + qiyou + " tap=" + tap + " lan=" + lan);
         }
 
+        /// <summary>The disguised Winsock probe is opt-in: without winsock.txt it must not even
+        /// start a process; with it, the helper answers a local address over the JSON protocol.</summary>
+        static void CheckWinsock(Assembly asm)
+        {
+            try
+            {
+                var helper = asm.GetType("Hd2Qd.LobbyBrowser.Helper");
+                var winsock = helper != null
+                    ? helper.GetMethod("Winsock", BindingFlags.NonPublic | BindingFlags.Static) : null;
+                if (winsock == null) { Check("winsock probe is opt-in", false, "Helper.Winsock missing"); return; }
+                var home = Path.Combine(Home(), "winsock-" + Guid.NewGuid().ToString("N"));
+                Directory.CreateDirectory(home);
+                var args = new object[] { home, new[] { "127.0.0.1" } };
+                var off = winsock.Invoke(null, args) as System.Collections.IDictionary;
+                Directory.CreateDirectory(Path.Combine(home, "lobbybrowser"));
+                File.WriteAllText(Path.Combine(home, "lobbybrowser", "winsock.txt"), "on");
+                var on = winsock.Invoke(null, args) as System.Collections.IDictionary;
+                Check("winsock probe is opt-in", off != null && off.Count == 0 && on != null && on.Contains("127.0.0.1"),
+                    "off=" + (off == null ? -1 : off.Count) + " on=" + (on == null ? -1 : on.Count));
+            }
+            catch (Exception e)
+            {
+                Check("winsock probe is opt-in", false, (e.InnerException ?? e).Message);
+            }
+        }
+
         /// <summary>The language rule: a manager tag maps onto the two this plugin has, the
         /// player's choice is read from its own file and beats the manager's, and following
         /// reads the manager's gui.json as it stands.</summary>
@@ -282,6 +308,7 @@ namespace Hd2Qd.Verify
             CheckPresets(asm);
             CheckPicker(asm);
             CheckPingRoute(asm);
+            CheckWinsock(asm);
             CheckLanguage(asm);
 
             // ---- a live scan through the plugin's own command ----

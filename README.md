@@ -41,6 +41,15 @@ TUN/TAP one), the echo is sent **from that adapter's address**, so the number fo
 accelerated route; a probe that gets no answer falls back to the default route. The adapter is
 looked up when the plugin loads — start the accelerator before opening the window.
 
+For an accelerator that routes **by process name** instead of by adapter, there is an opt-in mode:
+create `winsock.txt` containing `on` in the plugin's settings folder (`<home>/lobbybrowser`, or
+`%USERPROFILE%\.hd2-mod-cli\lobbybrowser`). The plugin then writes a short-lived probe copy of its
+helper as `Helldivers2.exe` in that folder and measures TCP handshakes through Winsock, which such
+an accelerator can intercept; no Steamworks is started. Delete the file to turn it off — the
+lookalike is removed too. This works only if the accelerator matches the executable **name**; one
+that matches the game's full install path will not see it. A process named after the game can be
+flagged by Steam, anti-cheat or antivirus — use it at your own risk.
+
 The **platform** column is the original's PlayFab lookup: a crossplay lobby names its host by
 PlayFab entity id (lobby key 3), and that id's public profile object `testament_backing_platform`
 says 0 = PlayStation, 1 = Steam, 4 = Xbox (its `testament_platform_user_name` fills the host name).
@@ -131,9 +140,10 @@ Steam's own banner.
   `platforms.json`, the host platforms PlayFab named, with when it named them; `language.txt`, the
   window's language when it was set to something other than HD2QD's (no file: follow). No log.
 - **Contacts:** the Steam client on this PC (local); `https://api.helldivers2.dev/api/v1/planets`
-  for the planet table (once per five minutes, with the identifying headers that API asks for); and
+  for the planet table (once per five minutes, with the identifying headers that API asks for);
   PlayFab's `974a9` title (`https://974a9.playfabapi.com`) for host platforms, signed in with the
-  Steam ticket, one profile request a crossplay host.
+  Steam ticket, one profile request a crossplay host; and the Steam relay IPs in `sdr_pops.json`,
+  reached by ICMP or — in the opt-in Winsock mode — by a TCP handshake.
 
 ## Not ported
 
@@ -186,6 +196,12 @@ it. `tests\Verify.exe <dll>` checks it against the plugin contract of
 大厅从不公布自己的地址。延迟在管理器进程里与扫描并行测量，不占用 Steam 会话。
 如果检测到加速器（奇游或其他 TUN/TAP）的**虚拟网卡**已启用，探测会以该网卡的地址为源地址发出，
 从而走加速线路；探测无应答时回退默认路由。网卡在插件加载时识别，请先开加速器再打开大厅浏览器。
+
+若加速器是**按进程名**分流而非按网卡，可以手动开启可选模式：在插件设置目录（`<home>/lobbybrowser`，
+默认 `%USERPROFILE%\.hd2-mod-cli\lobbybrowser`）里建一个内容为 `on` 的 `winsock.txt`。插件会把探测用的
+helper 复制成同目录的 `Helldivers2.exe`，用 Winsock TCP 握手测延迟，让按进程名劫持的加速器能拦到；
+该进程不初始化 Steamworks。删除 `winsock.txt` 即关闭，同名副本也会删掉。**仅当加速器按文件名匹配时有效**，
+按游戏安装完整路径匹配则无效。把进程命名为游戏名可能被 Steam、反作弊或杀软误报，请自行判断风险。
 
 **平台**列用的是原项目的 PlayFab 查询：跨平台房间用 PlayFab 实体 id 标识房主（大厅键 3），该 id 的公开资料对象
 `testament_backing_platform` 给出 0=PlayStation、1=Steam、4=Xbox（`testament_platform_user_name` 顺带补上房主名）。
@@ -254,8 +270,9 @@ Steam 自己那串 breakpad 文本。
   （来自 DLL 内嵌资源，升级时替换）、`presets.json`（玩家保存的预设）、`planets.json`（上次的星球表与限流冷却）、
   `platforms.json`（PlayFab 给出的房主平台及时间）、`language.txt`（本窗口的语言，跟随管理器时不写）。不写日志。
 - **联网**：本机 Steam 客户端（本地）；`https://api.helldivers2.dev/api/v1/planets`（星球表，最多每五分钟一次，
-  带该接口要求的标识头）；以及 PlayFab 的 `974a9` 标题（`https://974a9.playfabapi.com`）查房主平台——用 Steam 票据
-  登录，每个跨平台房主一次资料请求。
+  带该接口要求的标识头）；PlayFab 的 `974a9` 标题（`https://974a9.playfabapi.com`）查房主平台——用 Steam 票据
+  登录，每个跨平台房主一次资料请求；以及 `sdr_pops.json` 里的 Steam 中继 IP——默认 ICMP，可选的 Winsock 模式
+  用 TCP 握手探测。
 
 ## 未移植
 

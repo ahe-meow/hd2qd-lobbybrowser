@@ -824,7 +824,7 @@ namespace Hd2Qd.LobbyBrowser
             }
             var round = ++_pingRound;
             var dispatcher = _shell.Host != null ? _shell.Host.Dispatcher : Dispatcher.CurrentDispatcher;
-            Task.Run(() => Ping.Regions(regions)).ContinueWith(task => dispatcher.BeginInvoke((Action)(() =>
+            Task.Run(() => Ping.Regions(regions, _home)).ContinueWith(task => dispatcher.BeginInvoke((Action)(() =>
             {
                 if (round != _pingRound || task.IsFaulted) return;
                 foreach (var room in _rooms)

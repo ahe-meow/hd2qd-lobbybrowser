@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Web.Script.Serialization;
@@ -171,13 +172,86 @@ namespace Hd2Qd.LobbyBrowser
                 }
         }
 
+        /// <summary>An opt-in probe through Winsock: the helper carries the game's file name so
+        /// an accelerator that routes by process name intercepts the connection. It never starts
+        /// Steamworks, and this method returns nothing if the enabling file is absent.</summary>
+        internal static Dictionary<string, int?> Winsock(string home, IEnumerable<string> addresses)
+        {
+            var result = new Dictionary<string, int?>();
+            var ips = (addresses ?? new string[0]).Where(a => !string.IsNullOrEmpty(a)).Distinct().ToList();
+            if (ips.Count == 0 || !File.Exists(Path.Combine(Folder(home), "winsock.txt")))
+            {
+                // opting out removes the lookalike too: no reason to leave a game-named file behind
+                try { File.Delete(Path.Combine(Folder(home), "Helldivers2.exe")); } catch { }
+                return result;
+            }
+            string exe;
+            try { exe = Disguised(home); }
+            catch { return result; }
+
+            var request = Json.Serialize(new Dictionary<string, object> { ["winsock"] = ips });
+            try
+            {
+                using (var process = Process.Start(new ProcessStartInfo
+                {
+                    FileName = exe, WorkingDirectory = Path.GetDirectoryName(exe),
+                    UseShellExecute = false, CreateNoWindow = true,
+                    RedirectStandardInput = true, RedirectStandardOutput = true,
+                    StandardOutputEncoding = Encoding.UTF8,
+                }))
+                {
+                    if (process == null) return result;
+                    process.StandardInput.Write(request);
+                    process.StandardInput.Close();
+                    string line;
+                    while ((line = process.StandardOutput.ReadLine()) != null)
+                    {
+                        var message = Parse(line);
+                        if (message == null || !message.TryGetValue("winsock", out var values) ||
+                            !(values is Dictionary<string, object> table)) continue;
+                        foreach (var pair in table)
+                            result[pair.Key] = pair.Value == null ? (int?)null : Convert.ToInt32(pair.Value);
+                    }
+                    process.WaitForExit(5000);
+                }
+            }
+            catch
+            {
+                // a failed probe is an empty answer, never a broken window
+            }
+            return result;
+        }
+
+        /// <summary>The probe helper under the game's name. Kept in the plugin's own folder —
+        /// putting a lookalike in the game's install directory would be a much worse idea.</summary>
+        static string Disguised(string home)
+        {
+            var directory = Folder(home);
+            Directory.CreateDirectory(directory);
+            var exe = Path.Combine(directory, "Helldivers2.exe");
+            var assembly = typeof(Helper).Assembly;
+            using (var resource = assembly.GetManifestResourceStream(Resource))
+            {
+                if (resource == null) throw new InvalidOperationException(Resource + " is not in this plugin");
+                var length = (int)resource.Length;
+                if (File.Exists(exe) && new FileInfo(exe).Length == length) return exe;
+                var temporary = exe + ".tmp";
+                using (var file = File.Create(temporary)) resource.CopyTo(file);
+                if (File.Exists(exe)) File.Delete(exe);
+                File.Move(temporary, exe);
+            }
+            return exe;
+        }
+
         /// <summary>The helper of this version, written beside the manager's settings when it is
         /// not there yet (or is another version's). Old helpers are removed.</summary>
+        static string Folder(string home) => string.IsNullOrEmpty(home)
+            ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "HD2QD.LobbyBrowser")
+            : Path.Combine(home, "lobbybrowser");
+
         static string Ensure(string home)
         {
-            var directory = string.IsNullOrEmpty(home)
-                ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "HD2QD.LobbyBrowser")
-                : Path.Combine(home, "lobbybrowser");
+            var directory = Folder(home);
             Directory.CreateDirectory(directory);
             var version = typeof(Helper).Assembly.GetName().Version.ToString(3);
             var exe = Path.Combine(directory, "HD2QD.LobbyBrowser.Helper." + version + ".exe");
