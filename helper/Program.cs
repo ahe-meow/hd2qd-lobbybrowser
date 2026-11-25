@@ -102,6 +102,11 @@ namespace Hd2Qd.LobbyBrowser
                         if (!client.ConnectAsync(ip, port).Wait(900)) continue;
                         if (!client.Connected) continue;
                         clock.Stop();
+                        // A name-based accelerator can accept the connect locally in well under a
+                        // millisecond, before it has opened the remote leg. That is not a round
+                        // trip: a whole-millisecond reading of zero is an invalid answer, not a
+                        // 0 ms route. Try the next port; the caller falls back to ICMP if all fail.
+                        if (clock.ElapsedMilliseconds < 1) continue;
                         return (int)Math.Min(int.MaxValue, clock.ElapsedMilliseconds);
                     }
                 }

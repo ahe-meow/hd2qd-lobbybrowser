@@ -45,8 +45,10 @@ For an accelerator that routes **by process name** instead of by adapter, there 
 create `winsock.txt` containing `on` in the plugin's settings folder (`<home>/lobbybrowser`, or
 `%USERPROFILE%\.hd2-mod-cli\lobbybrowser`). The plugin then writes a short-lived probe copy of its
 helper as `Helldivers2.exe` in that folder and measures TCP handshakes through Winsock, which such
-an accelerator can intercept; no Steamworks is started. Delete the file to turn it off — the
-lookalike is removed too. This works only if the accelerator matches the executable **name**; one
+an accelerator can intercept; no Steamworks is started. A handshake under one millisecond is
+discarded — a local accelerator can accept the connection before the remote leg exists — and that
+region falls back to ICMP. Delete the file to turn it off — the lookalike is removed too.
+This works only if the accelerator matches the executable **name**; one
 that matches the game's full install path will not see it. A process named after the game can be
 flagged by Steam, anti-cheat or antivirus — use it at your own risk.
 
@@ -200,7 +202,8 @@ it. `tests\Verify.exe <dll>` checks it against the plugin contract of
 若加速器是**按进程名**分流而非按网卡，可以手动开启可选模式：在插件设置目录（`<home>/lobbybrowser`，
 默认 `%USERPROFILE%\.hd2-mod-cli\lobbybrowser`）里建一个内容为 `on` 的 `winsock.txt`。插件会把探测用的
 helper 复制成同目录的 `Helldivers2.exe`，用 Winsock TCP 握手测延迟，让按进程名劫持的加速器能拦到；
-该进程不初始化 Steamworks。删除 `winsock.txt` 即关闭，同名副本也会删掉。**仅当加速器按文件名匹配时有效**，
+该进程不初始化 Steamworks。不到 1ms 的握手判为无效（本地加速器会先接受连接、远端链路还没建立），该区域回退 ICMP。
+删除 `winsock.txt` 即关闭，同名副本也会删掉。**仅当加速器按文件名匹配时有效**，
 按游戏安装完整路径匹配则无效。把进程命名为游戏名可能被 Steam、反作弊或杀软误报，请自行判断风险。
 
 **平台**列用的是原项目的 PlayFab 查询：跨平台房间用 PlayFab 实体 id 标识房主（大厅键 3），该 id 的公开资料对象

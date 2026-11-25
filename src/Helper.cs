@@ -210,7 +210,10 @@ namespace Hd2Qd.LobbyBrowser
                         if (message == null || !message.TryGetValue("winsock", out var values) ||
                             !(values is Dictionary<string, object> table)) continue;
                         foreach (var pair in table)
-                            result[pair.Key] = pair.Value == null ? (int?)null : Convert.ToInt32(pair.Value);
+                        {
+                            var value = pair.Value == null ? 0 : Convert.ToInt32(pair.Value);
+                            result[pair.Key] = value > 0 ? (int?)value : null;   // a 0 ms handshake is not a route
+                        }
                     }
                     process.WaitForExit(5000);
                 }

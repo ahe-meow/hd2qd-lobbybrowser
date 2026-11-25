@@ -162,7 +162,8 @@ namespace Hd2Qd.LobbyBrowser
                 {
                     var answers = new List<int>();
                     foreach (var node in list)
-                        if (viaWinsock.TryGetValue(node, out var answer) && answer.HasValue) answers.Add(answer.Value);
+                        if (viaWinsock.TryGetValue(node, out var answer) && answer.HasValue && answer.Value > 0)
+                            answers.Add(answer.Value);
                     if (answers.Count > 0) value = answers.Min();
                 }
                 if (!value.HasValue) value = Measure(region);
