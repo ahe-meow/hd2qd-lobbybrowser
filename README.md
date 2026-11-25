@@ -21,7 +21,9 @@ so the row does not wrap into a ragged second line. A **planet** picked in the p
 front's chip takes all of its planets) makes the scan ask Steam for exactly those planets; a
 **mission** filter narrows the results already in hand, so it costs no scan. **Presets** keep a set of all of that under a name (planets, fronts,
 difficulty, the switches, the missions, the sort) and put it back with one click; they live in
-`presets.json` in the plugin's folder in the manager's settings.
+`presets.json` in the plugin's folder in the manager's settings. Each name has its own line with
+**Load** and **Delete** beside it, so a long list costs one line a preset — a card of the manager's,
+not a menu item per action.
 
 **Join** — bottom right, or a double-click, or Enter — opens
 `steam://joinlobby/553850/<lobby>/<host>` and nothing else. When the game is closed, Steam itself
@@ -162,7 +164,8 @@ it. `tests\Verify.exe <dll>` checks it against the plugin contract of
 **星球**选择器（可搜索，战线 chip 一键全选该战线）让扫描只向 Steam 要这些星球；**任务**筛选只作用于已有结果、
 不重新扫描。**预设**把这些条件
 （星球、战线、难度、开关、任务、排序）连同名字存起来，一键套回；存在管理器设置目录下插件自己的文件夹里的
-`presets.json`。
+`presets.json`。每个名字独占一行，**载入**与**删除**就在同一行右侧——预设再多也只占“每套一行”，
+不随动作数量翻倍。
 
 **加入**在右下角（也可双击行、回车）：只做一件事——打开 `steam://joinlobby/553850/<大厅>/<房主>`。
 游戏没运行时，Steam 自己会用 `+connect_lobby <大厅>` 启动游戏，游戏启动过程中直接进房；这正是 Valve 文档里

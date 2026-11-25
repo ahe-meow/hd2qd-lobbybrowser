@@ -550,36 +550,38 @@ namespace Hd2Qd.LobbyBrowser
         }
 
         /// <summary>The presets: the filters in hand saved under a name, and put back with one
-        /// click — planets, fronts, difficulty, the switches, the missions and the sort, as
-        /// HD2LobbyBrowser's preset holds them (that one keeps a single set; this keeps each name
-        /// the player gave). Kept in a file of the plugin's own in the manager's settings folder.</summary>
+        /// click. Each name has its own line, with Load and Delete beside it — a list that grows
+        /// costs one line a preset, not two (the user, 2026-11-25).</summary>
         void PickPresets()
         {
-            var presets = Presets.Load(_home);
-            var menu = new ContextMenu { PlacementTarget = _presetButton, Placement = PlacementMode.Bottom };
-            var save = new MenuItem { Header = Words.Get(_lang, "preset_save") };
-            save.Click += (s, e) => SavePreset(presets);
-            menu.Items.Add(save);
-            if (presets.Count > 0)
+            var popup = new Popup
             {
-                menu.Items.Add(new Separator());
-                foreach (var preset in presets)
-                {
-                    var apply = new MenuItem { Header = preset.Name };
-                    var chosen = preset;
-                    apply.Click += (s, e) => ApplyPreset(chosen);
-                    menu.Items.Add(apply);
-                }
-                menu.Items.Add(new Separator());
-                foreach (var preset in presets)
-                {
-                    var remove = new MenuItem { Header = Words.F(_lang, "preset_remove_one", preset.Name) };
-                    var name = preset.Name;
-                    remove.Click += (s, e) => RemovePreset(name);
-                    menu.Items.Add(remove);
-                }
+                PlacementTarget = _presetButton, Placement = PlacementMode.Bottom, VerticalOffset = 6,
+                StaysOpen = false, AllowsTransparency = true, PopupAnimation = PopupAnimation.None,
+            };
+            void Paint()
+            {
+                var presets = Presets.Load(_home);
+                popup.Child = PresetView.Card(presets, _lang,
+                    name =>
+                    {
+                        popup.IsOpen = false;
+                        var preset = presets.Find(p => string.Equals(p.Name, name, StringComparison.CurrentCulture));
+                        if (preset != null) ApplyPreset(preset);
+                    },
+                    name =>
+                    {
+                        RemovePreset(name);
+                        Paint();                       // the list is drawn again, one line shorter
+                    },
+                    () =>
+                    {
+                        popup.IsOpen = false;
+                        SavePreset(presets);
+                    });
             }
-            menu.IsOpen = true;
+            Paint();
+            popup.IsOpen = true;
         }
 
         /// <summary>The filters in hand, named: a name already in the list is replaced by what is

@@ -80,7 +80,6 @@
   "preset_name_default": "预设 {0}",
   "preset_saved": "已保存「{0}」。",
   "preset_failed": "预设保存失败：{0}",
-  "preset_remove_one": "删除「{0}」",
   "preset_removed": "已删除「{0}」。",
   "preset_applied": "已套用「{0}」。",
   "err_steam": "Steam 不可用：{0}",
@@ -98,5 +97,8 @@
   "tick_public": "公开房",
   "tick_nosession": "有会话",
   "tick_full": "未满员",
-  "tick_sos": "SOS"
+  "tick_sos": "SOS",
+  "preset_load": "载入",
+  "preset_delete": "删除",
+  "preset_none": "还没有预设。"
 }

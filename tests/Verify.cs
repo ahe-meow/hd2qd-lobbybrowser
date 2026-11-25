@@ -173,6 +173,7 @@ namespace Hd2Qd.Verify
             if (args.Contains("--window")) return ShowWindow(path);
             if (args.Contains("--api")) return CheckApi(path);
             if (args.Contains("--helper")) return ProbeHelper(path, args[args.Length - 1]);
+            if (args.Contains("--presets")) return ShowPresets(path);
             Console.WriteLine("Plugin: " + path);
             if (!File.Exists(path)) { Console.WriteLine("FAIL  file not found"); return 2; }
 
@@ -296,6 +297,68 @@ namespace Hd2Qd.Verify
         /// <summary>Opens the plugin's window with the manager's own host dictionary shape, lets
         /// its scan run, and writes what a player sees to tests/window.png: the only check of the
         /// drawing itself, which needs no manager.</summary>
+        /// <summary>The presets card alone: six names, each with Load and Delete on its own line.
+        /// A picture of that part, for the README and for the person who asked for it
+        /// (2026-11-25). The card is the plugin's own (PresetView.Card); only the window around it
+        /// is the test's, and no scan is started for a shot.</summary>
+        static int ShowPresets(string path)
+        {
+            var asm = Assembly.LoadFrom(path);
+            var preset = asm.GetType("Hd2Qd.LobbyBrowser.Preset");
+            var view = asm.GetType("Hd2Qd.LobbyBrowser.PresetView");
+            var theme = asm.GetType("Hd2Qd.LobbyBrowser.Theme");
+            var list = (System.Collections.IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(preset));
+            foreach (var name in new[] { "深夜刷样本 · 难度 10", "东线 快速刷样本", "西线 机器人 7 级", "光能 紧急撤离", "萌新友好（3–5 级）", "SOS 救援" })
+            {
+                var item = Activator.CreateInstance(preset, true);
+                preset.GetField("Name", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(item, name);
+                list.Add(item);
+            }
+
+            var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+            var ground = (System.Windows.Media.Brush)theme.GetMethod("B", BindingFlags.NonPublic | BindingFlags.Static).Invoke(null, new object[] { "Ground900" });
+            var ink = (System.Windows.Media.Brush)theme.GetMethod("B", BindingFlags.NonPublic | BindingFlags.Static).Invoke(null, new object[] { "Ink" });
+
+            var frame = new System.Windows.Controls.Border { Padding = new Thickness(16) };
+            var window = new Window
+            {
+                Title = "presets", Width = 420, Height = 380, Background = ground, Foreground = ink,
+                FontFamily = new FontFamily("Bahnschrift, Microsoft YaHei UI"), FontSize = 14,
+                Content = frame,
+            };
+            // the card is built once the window's message loop is up: WPF elements made before
+            // Application.Run have to reach their Dispatcher afterwards, and this shot is not
+            // worth that risk
+            window.Loaded += (s, e) =>
+            {
+                frame.Child = (FrameworkElement)view.GetMethod("Card", BindingFlags.NonPublic | BindingFlags.Static)
+                    .Invoke(null, new object[] { list, "zh-CN", new Action<string>(name => { }), new Action<string>(name => { }), new Action(() => { }) });
+                window.UpdateLayout();
+            };
+            window.Show();
+
+            var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1.2) };
+            timer.Tick += (s, e) =>
+            {
+                timer.Stop();
+                var content = window.Content as FrameworkElement;
+                content.UpdateLayout();
+                var width = (int)Math.Max(1, content.ActualWidth);
+                var height = (int)Math.Max(1, content.ActualHeight);
+                var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+                bitmap.Render(content);
+                var encoder = new PngBitmapEncoder();
+                encoder.Frames.Add(BitmapFrame.Create(bitmap));
+                var file = Path.Combine(Directory.GetCurrentDirectory(), "presets.png");
+                using (var stream = File.Create(file)) encoder.Save(stream);
+                Console.WriteLine("PASS  presets card rendered to " + file + " (" + width + "x" + height + ")");
+                app.Shutdown();
+            };
+            timer.Start();
+            app.Run();
+            return 0;
+        }
+
         static int ShowWindow(string path)
         {
             var asm = Assembly.LoadFrom(path);

@@ -81,7 +81,6 @@
   "preset_name_default": "Preset {0}",
   "preset_saved": "Saved “{0}”.",
   "preset_failed": "The preset could not be saved: {0}",
-  "preset_remove_one": "Remove “{0}”",
   "preset_removed": "Removed “{0}”.",
   "preset_applied": "Applied “{0}”.",
   "err_steam": "Steam is not available: {0}",
@@ -99,5 +98,8 @@
   "tick_public": "Public",
   "tick_nosession": "Session",
   "tick_full": "Not full",
-  "tick_sos": "SOS"
+  "tick_sos": "SOS",
+  "preset_load": "Load",
+  "preset_delete": "Delete",
+  "preset_none": "No presets yet."
 }
