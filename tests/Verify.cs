@@ -347,7 +347,7 @@ namespace Hd2Qd.Verify
                 Console.WriteLine("FAIL  Open() threw: " + (e.InnerException ?? e).Message);
                 return 1;
             }
-            var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
+            var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(55) };
             timer.Tick += (s, e) =>
             {
                 timer.Stop();

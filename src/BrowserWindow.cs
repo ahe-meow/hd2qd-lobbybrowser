@@ -152,26 +152,30 @@ namespace Hd2Qd.LobbyBrowser
             };
             _join.Click += (s, e) => Join();
 
+            // three groups on one line — the filters that open something, the fronts, the
+            // switches — with a hairline between them, so a wrapped line never reads as one run
             var bar = new WrapPanel { VerticalAlignment = VerticalAlignment.Center };
             bar.Children.Add(_refresh);
             bar.Children.Add(_planetButton);
             bar.Children.Add(_difficulty);
             bar.Children.Add(_missionButton);
             bar.Children.Add(_presetButton);
+            bar.Children.Add(Rule());
             foreach (var front in new[] { "Terminids", "Automatons", "Illuminate" })
             {
                 var chip = new CheckBox
                 {
-                    Content = Tables.FrontName(front, lang), Tag = front, IsChecked = true, Style = Theme.S("Chip"),
+                    Content = Tables.FrontShort(front, lang), Tag = front, IsChecked = true, Style = Theme.S("Chip"),
+                    ToolTip = Tables.FrontName(front, lang),
                 };
                 _fronts.Add(chip);
                 bar.Children.Add(chip);
             }
-            _publicOnly = Tick(lang, "public_only", true);
-            _hideNoSession = Tick(lang, "hide_nosession", true);
-            _hideFull = Tick(lang, "hide_full", false);
-            _sosOnly = Tick(lang, "sos_only", false);
-            _publicOnly.Margin = new Thickness(6, 0, 18, 0);      // a breath after the chips
+            bar.Children.Add(Rule());
+            _publicOnly = Tick(lang, "tick_public", "public_only", true);
+            _hideNoSession = Tick(lang, "tick_nosession", "hide_nosession", true);
+            _hideFull = Tick(lang, "tick_full", "hide_full", false);
+            _sosOnly = Tick(lang, "tick_sos", "sos_only", false);
             bar.Children.Add(_publicOnly);
             bar.Children.Add(_hideNoSession);
             bar.Children.Add(_hideFull);
@@ -320,14 +324,24 @@ namespace Hd2Qd.LobbyBrowser
 
         Button Farm(string text, string style) => new Button
         {
-            Content = text, Style = Theme.S(style), MinHeight = 36,
-            Padding = new Thickness(14, 0, 14, 0), Margin = new Thickness(0, 0, 8, 0),
+            Content = text, Style = Theme.S(style), MinHeight = 34,
+            Padding = new Thickness(12, 0, 12, 0), Margin = new Thickness(0, 0, 6, 0),
         };
 
-        CheckBox Tick(string lang, string key, bool on) => new CheckBox
+        /// <summary>A hairline between two groups of the filter row: the manager's grid colour,
+        /// as tall as a button's words.</summary>
+        static Border Rule() => new Border
+        {
+            Width = 1, Height = 18, Background = Theme.B("Grid"),
+            Margin = new Thickness(8, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        /// <summary>A switch: a short word on the row, the whole sentence in its tip.</summary>
+        CheckBox Tick(string lang, string key, string tip, bool on) => new CheckBox
         {
             Content = Words.Get(lang, key), IsChecked = on, Style = Theme.S("Tick"),
-            Margin = new Thickness(0, 0, 18, 0), VerticalAlignment = VerticalAlignment.Center,
+            ToolTip = Words.Get(lang, tip), FontSize = 12,
+            Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center,
         };
 
         /// <summary>The table's words, over the same columns as the rows, in the manager's label

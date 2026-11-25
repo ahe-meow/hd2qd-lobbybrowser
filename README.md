@@ -14,10 +14,12 @@ the lobby keys and the name tables are that program's, ported to a manager plugi
 One row per public lobby: planet, front, difficulty, players, mission, region, SOS, **ping**, host,
 age. Every column but SOS sorts: click its name, click again to turn it round.
 
-Filters: a **planet** picker (search, a front's chip takes all of its planets) makes the scan ask
-Steam for exactly those planets and nothing else; a **mission** filter narrows the results already
-in hand, so it costs no scan; difficulty, public only, no-session lobbies, full lobbies and SOS
-narrow them further. **Presets** keep a set of all of that under a name (planets, fronts,
+The filter row is one line of three groups, a hairline between them: what opens something
+(Refresh, Planet, Difficulty, Mission, Presets), the three fronts as chips, and the four switches —
+each a short word on the row (Public, Session, Not full, SOS) with the whole sentence in its tip,
+so the row does not wrap into a ragged second line. A **planet** picked in the picker (search; a
+front's chip takes all of its planets) makes the scan ask Steam for exactly those planets; a
+**mission** filter narrows the results already in hand, so it costs no scan. **Presets** keep a set of all of that under a name (planets, fronts,
 difficulty, the switches, the missions, the sort) and put it back with one click; they live in
 `presets.json` in the plugin's folder in the manager's settings.
 
@@ -155,8 +157,10 @@ it. `tests\Verify.exe <dll>` checks it against the plugin contract of
 每个公开大厅一行：星球、战线、难度、人数、任务、地区、SOS、**延迟**、房主、建立时间。除 SOS 外每一列
 都可排序：点列名升序，再点一次反向。
 
-筛选：**星球**选择器（可搜索，战线 chip 一键全选该战线）让扫描只向 Steam 要这些星球；**任务**筛选只作用于
-已有结果、不重新扫描；难度、只看公开房、隐藏无会话房、隐藏满员、只看 SOS 继续收窄。**预设**把这些条件
+筛选行是一整行三组，组间一条细线：能展开的（刷新、星球、难度、任务、预设）、三条战线 chip、四个开关——
+开关在行内用短词（公开房 / 有会话 / 未满员 / SOS），完整含义放在悬停提示里，这样一行不会被挤成参差的第二行。
+**星球**选择器（可搜索，战线 chip 一键全选该战线）让扫描只向 Steam 要这些星球；**任务**筛选只作用于已有结果、
+不重新扫描。**预设**把这些条件
 （星球、战线、难度、开关、任务、排序）连同名字存起来，一键套回；存在管理器设置目录下插件自己的文件夹里的
 `presets.json`。
 

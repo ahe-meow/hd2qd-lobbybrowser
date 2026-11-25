@@ -4,10 +4,10 @@
   "refresh": "刷新",
   "refresh_tip": "每次扫描会开一个很短的 Steam 会话（大厅列表只能从 Steamworks 取），这几秒里 Steam 会把游戏显示为运行中，随后消失。",
   "join": "加入",
-  "public_only": "只看公开房",
-  "hide_nosession": "隐藏无会话房",
-  "hide_full": "隐藏满员",
-  "sos_only": "只看 SOS 房",
+  "public_only": "只看公开房（隐藏好友房与私密房）",
+  "hide_nosession": "只看有任务数据的房间（隐藏其余的）",
+  "hide_full": "隐藏已满的房间",
+  "sos_only": "只看发出 SOS 的房间",
   "diff_any": "全部难度",
   "diff_n": "难度 {0}",
   "front_term": "东线 虫族",
@@ -94,5 +94,9 @@
   "lang_follow": "跟随 HD2QD",
   "front_term_short": "虫族",
   "front_auto_short": "机器人",
-  "front_illu_short": "光能族"
+  "front_illu_short": "光能族",
+  "tick_public": "公开房",
+  "tick_nosession": "有会话",
+  "tick_full": "未满员",
+  "tick_sos": "SOS"
 }
