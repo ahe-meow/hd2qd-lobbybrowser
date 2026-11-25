@@ -65,7 +65,7 @@ its settings file (`gui.json`, "lang") is read too, so a window opened after the
 was changed follows it. The button at the right of the filter row switches this window between 中文
 and English — or back to following HD2QD — and keeps the choice beside the presets.
 
-The plugin ships an icon of its own (`src/app.ico`, a list and an arrow in the manager's colours),
+The plugin ships an icon of its own (`src/app.ico`, a ringed planet against deep space in the manager's colours),
 which the manager reads for the 20×20 picture on the plugin's card and for the content of a
 title-bar button — a button the manager gives only to the plugins in its own official list
 (`PluginFiles.HasButton` asks `OfficialOf`), so a plugin added from a file shows the icon on its
@@ -191,7 +191,7 @@ it. `tests\Verify.exe <dll>` checks it against the plugin contract of
 "lang"），所以在管理器里改过语言之后再打开的窗口会跟着变。筛选行最右侧的按钮把**本窗口**在 中文 / English 之间
 切换，或切回“跟随 HD2QD”，选择与预设放在一起。
 
-插件自带一个图标（`src/app.ico`：管理器配色下的“列表 + 箭头”），管理器用它画插件卡片上的 20×20 图标，
+插件自带一个图标（`src/app.ico`：管理器配色下的“深空带环行星”），管理器用它画插件卡片上的 20×20 图标，
 也用作标题栏按钮的内容——但**标题栏按钮只给官方清单里的插件**（`PluginFiles.HasButton` 要查 `OfficialOf`），
 从文件添加的插件只有卡片图标，没有标题栏按钮。
 
