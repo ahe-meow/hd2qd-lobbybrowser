@@ -111,7 +111,10 @@ namespace Hd2Qd.LobbyBrowser
         readonly ColumnDefinition _progressBefore = new ColumnDefinition();
         readonly ColumnDefinition _progressBar = new ColumnDefinition();
         readonly ColumnDefinition _progressAfter = new ColumnDefinition();
-        readonly DispatcherTimer _progressTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(90) };
+        readonly DispatcherTimer _progressTimer = new DispatcherTimer(DispatcherPriority.Render)
+        {
+            Interval = TimeSpan.FromMilliseconds(16),
+        };
         double _progressPhase;
         readonly TextBlock _empty = new TextBlock
         {
@@ -154,14 +157,15 @@ namespace Hd2Qd.LobbyBrowser
             meter.ColumnDefinitions.Add(_progressAfter);
             Grid.SetColumn(_progressFill, 1);
             meter.Children.Add(_progressFill);
-            // a full-width hairline stuck to the window's bottom edge — no card, no bottom margin
+            // a full-width hairline stuck to the window's bottom edge — the negative side margins
+            // cross the root's gutters, so the fill starts at the frame, not inside it
             _progressTrack = new Border
             {
-                Height = 6, Margin = new Thickness(0, 10, 0, 0),
+                Height = 6, Margin = new Thickness(-20, 10, -20, 0),
                 Background = Theme.B("Grid"), ClipToBounds = true, Child = meter,
                 VerticalAlignment = VerticalAlignment.Bottom, Visibility = Visibility.Collapsed,
             };
-            _progressTimer.Tick += (s, e) => { _progressPhase = (_progressPhase + 4) % 70; Bar(-1); };
+            _progressTimer.Tick += (s, e) => { _progressPhase = (_progressPhase + 0.7) % 70; Bar(-1); };
             _home = host != null && host.TryGetValue("home", out var home) ? home as string : null;
             _foot = host != null && host.TryGetValue("foot", out var foot) ? foot as Action<string, string> : null;
             _askText = host != null && host.TryGetValue("ask_text", out var ask) ? ask as Func<string, string, string, string> : null;
