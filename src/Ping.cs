@@ -13,16 +13,17 @@ using System.Web.Script.Serialization;
 namespace Hd2Qd.LobbyBrowser
 {
     /// <summary>What the ping column means: this PC's latency to the Steam Datagram Relay
-    /// network of the lobby's region — the best node there, as HD2LobbyBrowser measures it
-    /// (sdr_pops.json, ICMP through iphlpapi, no administrator rights needed). A lobby's own
-    /// address is never published, so the region is the closest a client can get.
+    /// network of the lobby's region — the best node there. A lobby's own address is never
+    /// published, so the region is the closest a client can get.
     ///
-    /// Measured here, in the manager's process: ICMP needs no Steamworks, so no Steam session is
-    /// opened for it, and the answers are kept five minutes across refreshes.
+    /// Preferred source: Steam's own ISteamNetworkingUtils measurement, brought back from the
+    /// short-lived scan helper while its Steam session was up. It is a real measurement Steam
+    /// makes to its relays, not a local handshake. Regions Steam could not measure fall back to
+    /// ICMP here (sdr_pops.json, iphlpapi, no administrator rights), cached five minutes.
     ///
     /// A game accelerator (奇游 and other TUN/TAP ones) puts the game on a virtual adapter while
     /// a bare ICMP echo would leave by the default route. When such an adapter is up, its IPv4
-    /// address becomes the source of the echo, so the probe uses the accelerated route too; a
+    /// address becomes the source of the echo, so the fallback uses the accelerated route too; a
     /// probe that gets no answer is retried on the default route rather than leaving the column
     /// empty.</summary>
     internal static class Ping
@@ -132,10 +133,11 @@ namespace Hd2Qd.LobbyBrowser
             return value;
         }
 
-        /// <summary>Every region of the list at once: the regions side by side and, inside each,
-        /// its nodes side by side (two probes a node, the closest kept, as the original does).
-        /// A region measured in the last five minutes is answered from the cache instead.</summary>
-        internal static Dictionary<string, int?> Regions(IEnumerable<string> regions, string home)
+        /// <summary>Every region of the list at once. Steam's own measurements come with the
+        /// scan and win over anything cached; only regions it did not measure are probed by ICMP
+        /// (two echoes a node, the closest kept), reusing a measurement from the last five
+        /// minutes.</summary>
+        internal static Dictionary<string, int?> Regions(IEnumerable<string> regions, IDictionary<string, int> steamPings)
         {
             var wanted = (regions ?? new string[0]).Where(r => !string.IsNullOrEmpty(r))
                 .Select(r => r.Trim().ToUpperInvariant()).Distinct().ToList();
@@ -145,28 +147,19 @@ namespace Hd2Qd.LobbyBrowser
             {
                 foreach (var region in wanted)
                 {
-                    if (Cache.TryGetValue(region, out var hit) && DateTime.UtcNow - hit.Key < Ttl) result[region] = hit.Value;
+                    if (steamPings != null && steamPings.TryGetValue(region, out var real) && real > 0)
+                    {
+                        result[region] = real;                 // fresh from Steam, every scan
+                        Cache[region] = new KeyValuePair<DateTime, int?>(DateTime.UtcNow, real);
+                    }
+                    else if (Cache.TryGetValue(region, out var hit) && DateTime.UtcNow - hit.Key < Ttl)
+                        result[region] = hit.Value;
                     else missing.Add(region);
                 }
             }
-            // opt-in: a process-named Winsock probe, so a name-based accelerator sees the traffic.
-            // It shares one short-lived helper across all regions; any region it cannot answer
-            // falls back to the ordinary ICMP route below.
-            var nodes = Nodes();
-            var viaWinsock = Helper.Winsock(home,
-                wanted.SelectMany(r => nodes.TryGetValue(r, out var list) ? list : new List<string>()));
             Parallel.ForEach(missing, region =>
             {
-                int? value = null;
-                if (viaWinsock.Count > 0 && nodes.TryGetValue(region, out var list))
-                {
-                    var answers = new List<int>();
-                    foreach (var node in list)
-                        if (viaWinsock.TryGetValue(node, out var answer) && answer.HasValue && answer.Value > 0)
-                            answers.Add(answer.Value);
-                    if (answers.Count > 0) value = answers.Min();
-                }
-                if (!value.HasValue) value = Measure(region);
+                var value = Measure(region);
                 lock (Gate)
                 {
                     Cache[region] = new KeyValuePair<DateTime, int?>(DateTime.UtcNow, value);

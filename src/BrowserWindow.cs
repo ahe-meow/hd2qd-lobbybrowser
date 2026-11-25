@@ -114,6 +114,7 @@ namespace Hd2Qd.LobbyBrowser
         readonly HashSet<int> _planets = new HashSet<int>();
         readonly HashSet<string> _missions = new HashSet<string>();     // by mission hash
         List<Room> _rooms = new List<Room>();
+        Dictionary<string, int> _steamPings = new Dictionary<string, int>();
         int _difficultyValue;
         string _self = "0";
         Sort _sort = Sort.Members;
@@ -798,6 +799,7 @@ namespace Hd2Qd.LobbyBrowser
             }
             _rooms = result.Rooms;
             _self = result.Self;
+            _steamPings = result.SteamPings;
             _scannedPlanets = result.Planets;
             _missions.RemoveWhere(hash => _rooms.All(r => (r.MissionHash ?? "") != hash));
             UpdateFilterLabels();
@@ -811,8 +813,8 @@ namespace Hd2Qd.LobbyBrowser
             MeasurePings(lang);
         }
 
-        /// <summary>The ping column: each region's relay latency, measured beside the scan rather
-        /// than in it (ICMP needs no Steam session), then the rows sorted again.</summary>
+        /// <summary>The ping column: Steam's own relay latencies came back with the scan; only
+        /// regions it did not measure are probed by ICMP here. The rows are sorted again after.</summary>
         void MeasurePings(string lang)
         {
             var regions = _rooms.Select(r => r.Region).Where(r => !string.IsNullOrEmpty(r)).Distinct().ToList();
@@ -824,7 +826,7 @@ namespace Hd2Qd.LobbyBrowser
             }
             var round = ++_pingRound;
             var dispatcher = _shell.Host != null ? _shell.Host.Dispatcher : Dispatcher.CurrentDispatcher;
-            Task.Run(() => Ping.Regions(regions, _home)).ContinueWith(task => dispatcher.BeginInvoke((Action)(() =>
+            Task.Run(() => Ping.Regions(regions, _steamPings)).ContinueWith(task => dispatcher.BeginInvoke((Action)(() =>
             {
                 if (round != _pingRound || task.IsFaulted) return;
                 foreach (var room in _rooms)

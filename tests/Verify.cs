@@ -171,41 +171,81 @@ namespace Hd2Qd.Verify
                 "qiyou=" + qiyou + " tap=" + tap + " lan=" + lan);
         }
 
-        /// <summary>The disguised Winsock probe is opt-in: without winsock.txt it must not even
-        /// start a process; with it, the helper answers a local address over the JSON protocol.</summary>
-        static void CheckWinsock(Assembly asm)
+        /// <summary>Steam's relay latency path: the helper packs four-character POP ids the way
+        /// Steam does, groups them by region, sends the measured map to the manager, and ICMP is
+        /// only consulted for regions Steam did not measure. The game-named Winsock probe must be
+        /// gone — nothing in this plugin writes or runs a Helldivers2.exe copy any more.</summary>
+        static void CheckSteamPings(Assembly asm)
         {
+            var flags = BindingFlags.NonPublic | BindingFlags.Static;
             try
             {
-                var helper = asm.GetType("Hd2Qd.LobbyBrowser.Helper");
-                var winsock = helper != null
-                    ? helper.GetMethod("Winsock", BindingFlags.NonPublic | BindingFlags.Static) : null;
-                if (winsock == null) { Check("winsock probe is opt-in", false, "Helper.Winsock missing"); return; }
-                var home = Path.Combine(Home(), "winsock-" + Guid.NewGuid().ToString("N"));
-                Directory.CreateDirectory(home);
-                var args = new object[] { home, new[] { "127.0.0.1" } };
-                var off = winsock.Invoke(null, args) as System.Collections.IDictionary;
-                var folder = Path.Combine(home, "lobbybrowser");
+                // load the exact helper the plugin carries, to check its own POP code
+                var folder = Path.Combine(Home(), "helper-" + Guid.NewGuid().ToString("N"));
                 Directory.CreateDirectory(folder);
-                byte[] embedded;
+                var exe = Path.Combine(folder, "HD2QD.LobbyBrowser.Helper.exe");
                 using (var stream = asm.GetManifestResourceStream("HD2QD.LobbyBrowser.Helper.exe"))
-                using (var memory = new MemoryStream())
+                using (var file = File.Create(exe)) stream.CopyTo(file);
+                var helperAsm = Assembly.LoadFrom(exe);
+                var steam = helperAsm.GetType("Hd2Qd.LobbyBrowser.Steam");
+                var popId = steam != null ? steam.GetMethod("PopId", flags) : null;
+                var popRegions = steam != null ? steam.GetMethod("PopRegions", flags) : null;
+                if (popId == null || popRegions == null)
+                { Check("steam pop ids and regions", false, "Steam.PopId/PopRegions missing"); return; }
+                var bom2 = (uint)popId.Invoke(null, new object[] { "bom2" });
+                var hkg = (uint)popId.Invoke(null, new object[] { "hkg" });
+                var packed = ((uint)'b' << 16) | ((uint)'o' << 8) | (uint)'m' | ((uint)'2' << 24);
+                var table = popRegions.Invoke(null, null) as System.Collections.IDictionary;
+                var asia = table != null && table.Contains("AS")
+                    ? ((System.Collections.IEnumerable)table["AS"]).Cast<uint>().ToList() : new List<uint>();
+                Check("steam pop ids and regions", bom2 == packed && hkg == (((uint)'h' << 16) | ((uint)'k' << 8) | (uint)'g')
+                    && asia.Contains(packed) && asia.Contains(hkg),
+                    "bom2=" + bom2.ToString("X8") + " hkg=" + hkg.ToString("X8") + " AS=" + asia.Count);
+
+                // the game's SDK names the getter differently from older ones; binding only
+                // v003 once made every Steam ping silently unavailable
+                // .NET stores string literals as UTF-16 in the assembly's user-string heap
+                var symbols = System.Text.Encoding.Unicode.GetString(File.ReadAllBytes(exe));
+                Check("steam networking utils getters", symbols.Contains("SteamAPI_SteamNetworkingUtils_v003")
+                    && symbols.Contains("SteamAPI_SteamNetworkingUtils_SteamAPI_v004"));
+
+                // the map the helper sends lands in ScanResult; the old probe is not in the DLL
+                var helper = asm.GetType("Hd2Qd.LobbyBrowser.Helper");
+                var resultType = asm.GetType("Hd2Qd.LobbyBrowser.ScanResult");
+                var read = helper != null ? helper.GetMethod("Read", flags) : null;
+                var field = resultType != null ? resultType.GetField("SteamPings", BindingFlags.NonPublic | BindingFlags.Instance) : null;
+                if (read == null || field == null)
+                { Check("steam pings travel to the manager", false, "Helper.Read/ScanResult.SteamPings missing"); return; }
+                var result = Activator.CreateInstance(resultType, true);
+                var message = new Dictionary<string, object>
                 {
-                    stream.CopyTo(memory);
-                    embedded = memory.ToArray();
-                }
-                // a stale copy of exactly the same length must still be replaced
-                var disguised = Path.Combine(folder, "Helldivers2.exe");
-                File.WriteAllBytes(disguised, new byte[embedded.Length]);
-                File.WriteAllText(Path.Combine(folder, "winsock.txt"), "on");
-                var on = winsock.Invoke(null, args) as System.Collections.IDictionary;
-                Check("winsock probe is opt-in", off != null && off.Count == 0 && on != null && on.Contains("127.0.0.1"),
-                    "off=" + (off == null ? -1 : off.Count) + " on=" + (on == null ? -1 : on.Count));
-                Check("winsock probe replaces a stale helper", File.ReadAllBytes(disguised).SequenceEqual(embedded));
+                    ["steamPings"] = new Dictionary<string, object> { ["AS"] = 42L },
+                    ["rooms"] = new List<object>(),
+                };
+                read.Invoke(null, new object[] { result, message, new List<object>(), "en" });
+                var parsed = field.GetValue(result) as System.Collections.IDictionary;
+                var noWinsock = helper.GetMethod("Winsock", flags) == null && helper.GetMethod("Disguised", flags) == null;
+                Check("steam pings travel to the manager", noWinsock && parsed != null && parsed.Contains("AS")
+                    && Convert.ToInt32(parsed["AS"]) == 42,
+                    "winsock gone=" + noWinsock + " AS=" + (parsed == null || !parsed.Contains("AS") ? "missing" : Convert.ToString(parsed["AS"])));
+
+                // an old ICMP cache entry must not win over a fresh Steam measurement
+                var ping = asm.GetType("Hd2Qd.LobbyBrowser.Ping");
+                var regions = ping != null ? ping.GetMethod("Regions", flags) : null;
+                if (regions == null) { Check("steam ping beats icmp cache", false, "Ping.Regions missing"); return; }
+                var cache = ping.GetField("Cache", flags).GetValue(null) as System.Collections.IDictionary;
+                cache["AS"] = new KeyValuePair<DateTime, int?>(DateTime.UtcNow, 999);
+                var answered = regions.Invoke(null, new object[]
+                {
+                    new[] { "AS" }, new Dictionary<string, int> { ["AS"] = 7 },
+                }) as System.Collections.IDictionary;
+                Check("steam ping beats icmp cache", answered != null && answered.Contains("AS")
+                    && Convert.ToInt32(answered["AS"]) == 7,
+                    "AS=" + (answered == null || !answered.Contains("AS") ? "missing" : Convert.ToString(answered["AS"])));
             }
             catch (Exception e)
             {
-                Check("winsock probe is opt-in", false, (e.InnerException ?? e).Message);
+                Check("steam pop ids and regions", false, (e.InnerException ?? e).Message);
             }
         }
 
@@ -320,7 +360,7 @@ namespace Hd2Qd.Verify
             CheckPresets(asm);
             CheckPicker(asm);
             CheckPingRoute(asm);
-            CheckWinsock(asm);
+            CheckSteamPings(asm);
             CheckLanguage(asm);
 
             // ---- a live scan through the plugin's own command ----

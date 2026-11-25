@@ -33,25 +33,21 @@ invitation path (`+connect_lobby` is the argument Helldivers 2's launch options 
 game first and joining afterwards does **not** work — the client then believes a game already runs
 and hands the lobby to the running-game callback, in a process whose Steamworks has not started.
 
-The ping column is this PC's latency to the **Steam relay of the lobby's region** (the closest of
-the region's nodes, `sdr_pops.json`, ICMP, five minutes of cache), the same measure the original
-program uses — a lobby never publishes its own address. It is measured beside the scan, in the
-manager, so it opens no Steam session. If a game accelerator's virtual adapter is up (奇游 or any
-TUN/TAP one), the echo is sent **from that adapter's address**, so the number follows the
-accelerated route; a probe that gets no answer falls back to the default route. The adapter is
-looked up when the plugin loads — start the accelerator before opening the window.
+The ping column is this PC's latency to the **Steam relay of the lobby's region** — the closest
+node there, as **Steam itself measures it**. The short-lived scan helper calls Steamworks
+`ISteamNetworkingUtils` (`InitRelayNetworkAccess`, `GetDirectPingToPOP` / `GetPingToDataCenter`,
+`GetPOPList`) while its Steam session is up and brings the result back with the scan. These are
+Steam's real measurements to its relay network: a local TCP handshake or an accelerator that
+accepts connections locally cannot fake a 0/1 ms value here. A lobby never publishes its own
+address, so the region is still the closest a client can get; this is not a reading of the game
+process's own connection object.
 
-For an accelerator that routes **by process name** instead of by adapter, there is an opt-in mode:
-create `winsock.txt` containing `on` in the plugin's settings folder (`<home>/lobbybrowser`, or
-`%USERPROFILE%\.hd2-mod-cli\lobbybrowser`). The plugin then writes a short-lived probe copy of its
-helper as `Helldivers2.exe` in that folder and measures TCP handshakes through Winsock, which such
-an accelerator can intercept; no Steamworks is started. A handshake under five milliseconds, or
-one accepted on a loopback endpoint, is discarded — a local accelerator can accept the connection
-before the remote leg exists — and that region falls back to ICMP. Delete the file to turn it off —
-the lookalike is removed too.
-This works only if the accelerator matches the executable **name**; one
-that matches the game's full install path will not see it. A process named after the game can be
-flagged by Steam, anti-cheat or antivirus — use it at your own risk.
+Regions Steam did not measure fall back to the original's method: ICMP to `sdr_pops.json` nodes,
+from the manager, cached five minutes. If a game accelerator's virtual adapter is up (奇游 or any
+TUN/TAP one), that echo is sent **from the adapter's address** so the fallback follows the
+accelerated route; an unanswered probe retries on the default route. The adapter is looked up when
+the plugin loads — start the accelerator before opening the window. There is no process-name
+disguise and no Winsock probe: nothing is written or run under the game's file name.
 
 The **platform** column is the original's PlayFab lookup: a crossplay lobby names its host by
 PlayFab entity id (lobby key 3), and that id's public profile object `testament_backing_platform`
@@ -145,8 +141,8 @@ Steam's own banner.
 - **Contacts:** the Steam client on this PC (local); `https://api.helldivers2.dev/api/v1/planets`
   for the planet table (once per five minutes, with the identifying headers that API asks for);
   PlayFab's `974a9` title (`https://974a9.playfabapi.com`) for host platforms, signed in with the
-  Steam ticket, one profile request a crossplay host; and the Steam relay IPs in `sdr_pops.json`,
-  reached by ICMP or — in the opt-in Winsock mode — by a TCP handshake.
+  Steam ticket, one profile request a crossplay host; Steam's relay network itself, for its own
+  POP ping measurements; and the relay IPs in `sdr_pops.json`, reached by ICMP as a fallback.
 
 ## Not ported
 
@@ -195,17 +191,16 @@ it. `tests\Verify.exe <dll>` checks it against the plugin contract of
 的邀请流程（`+connect_lobby` 也是社区用来跳过《绝地潜兵2》过场动画的启动参数）。**先启动游戏再发 join 是行不通的**：
 客户端会以为游戏已在运行，改走“运行中游戏回调”，而那个进程的 Steamworks 还没起来，请求就丢了。
 
-延迟是该区域 **Steam 中继**的延迟（该区域最优节点，`sdr_pops.json`，ICMP，缓存五分钟），与原项目同一算法；
-大厅从不公布自己的地址。延迟在管理器进程里与扫描并行测量，不占用 Steam 会话。
-如果检测到加速器（奇游或其他 TUN/TAP）的**虚拟网卡**已启用，探测会以该网卡的地址为源地址发出，
-从而走加速线路；探测无应答时回退默认路由。网卡在插件加载时识别，请先开加速器再打开大厅浏览器。
+延迟是该区域 **Steam 中继**的延迟（该区域最优节点）。现在优先采用 **Steam 自己测的延迟**：
+短命的扫描 helper 在 Steam 会话仍开着时调用 Steamworks `ISteamNetworkingUtils`
+（`InitRelayNetworkAccess`、`GetDirectPingToPOP` / `GetPingToDataCenter`、`GetPOPList`），把结果随扫描结果带回。
+这是 Steam 到其中继网络的真实测量，本地 TCP 握手或加速器在本地先 accept 连接都造不出 0/1ms 的假值。
+大厅从不公布自己的地址，因此显示的仍是区域中继延迟，不是游戏进程内部连接的读数。
 
-若加速器是**按进程名**分流而非按网卡，可以手动开启可选模式：在插件设置目录（`<home>/lobbybrowser`，
-默认 `%USERPROFILE%\.hd2-mod-cli\lobbybrowser`）里建一个内容为 `on` 的 `winsock.txt`。插件会把探测用的
-helper 复制成同目录的 `Helldivers2.exe`，用 Winsock TCP 握手测延迟，让按进程名劫持的加速器能拦到；
-该进程不初始化 Steamworks。不到 5ms 的握手、或被接到本机回环地址的连接都判为无效（本地加速器会先接受连接、
-远端链路还没建立），该区域回退 ICMP。删除 `winsock.txt` 即关闭，同名副本也会删掉。**仅当加速器按文件名匹配时有效**，
-按游戏安装完整路径匹配则无效。把进程命名为游戏名可能被 Steam、反作弊或杀软误报，请自行判断风险。
+Steam 没测到的区域才回退到原项目的办法：对 `sdr_pops.json` 节点做 ICMP 探测，缓存五分钟，在管理器进程里进行。
+如果检测到加速器（奇游或其他 TUN/TAP）的**虚拟网卡**已启用，这个兜底探测会以该网卡的地址为源地址发出，
+从而走加速线路；探测无应答时回退默认路由。网卡在插件加载时识别，请先开加速器再打开大厅浏览器。
+已彻底移除按进程名伪装的 Winsock 探测：插件不会再写入或以 `Helldivers2.exe` 为名运行任何文件。
 
 **平台**列用的是原项目的 PlayFab 查询：跨平台房间用 PlayFab 实体 id 标识房主（大厅键 3），该 id 的公开资料对象
 `testament_backing_platform` 给出 0=PlayStation、1=Steam、4=Xbox（`testament_platform_user_name` 顺带补上房主名）。
@@ -275,8 +270,8 @@ Steam 自己那串 breakpad 文本。
   `platforms.json`（PlayFab 给出的房主平台及时间）、`language.txt`（本窗口的语言，跟随管理器时不写）。不写日志。
 - **联网**：本机 Steam 客户端（本地）；`https://api.helldivers2.dev/api/v1/planets`（星球表，最多每五分钟一次，
   带该接口要求的标识头）；PlayFab 的 `974a9` 标题（`https://974a9.playfabapi.com`）查房主平台——用 Steam 票据
-  登录，每个跨平台房主一次资料请求；以及 `sdr_pops.json` 里的 Steam 中继 IP——默认 ICMP，可选的 Winsock 模式
-  用 TCP 握手探测。
+  登录，每个跨平台房主一次资料请求；Steam 中继网络本身（Steam 自测各 POP 的延迟）；以及 `sdr_pops.json`
+  里的中继 IP——仅在 Steam 未提供测量时用 ICMP 兜底。
 
 ## 未移植
 

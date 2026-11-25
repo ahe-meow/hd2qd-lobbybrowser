@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Web.Script.Serialization;
@@ -163,6 +162,10 @@ namespace Hd2Qd.LobbyBrowser
                 result.Planets = Convert.ToInt32(planets);
             if (message.TryGetValue("self", out var self) && self != null)
                 result.Self = Convert.ToString(self);
+            if (message.TryGetValue("steamPings", out var pings) && pings is Dictionary<string, object> table)
+                foreach (var pair in table)
+                    if (pair.Value != null && int.TryParse(Convert.ToString(pair.Value), out var ms) && ms > 0)
+                        result.SteamPings[pair.Key] = ms;
             foreach (var item in rooms)
                 if (item is Dictionary<string, object> d)
                 {
@@ -170,87 +173,6 @@ namespace Hd2Qd.LobbyBrowser
                     room.Dress(lang);                       // the words the list shows, in this language
                     result.Rooms.Add(room);
                 }
-        }
-
-        /// <summary>An opt-in probe through Winsock: the helper carries the game's file name so
-        /// an accelerator that routes by process name intercepts the connection. It never starts
-        /// Steamworks, and this method returns nothing if the enabling file is absent.</summary>
-        internal static Dictionary<string, int?> Winsock(string home, IEnumerable<string> addresses)
-        {
-            var result = new Dictionary<string, int?>();
-            var ips = (addresses ?? new string[0]).Where(a => !string.IsNullOrEmpty(a)).Distinct().ToList();
-            if (ips.Count == 0 || !File.Exists(Path.Combine(Folder(home), "winsock.txt")))
-            {
-                // opting out removes the lookalike too: no reason to leave a game-named file behind
-                try { File.Delete(Path.Combine(Folder(home), "Helldivers2.exe")); } catch { }
-                return result;
-            }
-            string exe;
-            try { exe = Disguised(home); }
-            catch { return result; }
-
-            var request = Json.Serialize(new Dictionary<string, object> { ["winsock"] = ips });
-            try
-            {
-                using (var process = Process.Start(new ProcessStartInfo
-                {
-                    FileName = exe, WorkingDirectory = Path.GetDirectoryName(exe),
-                    UseShellExecute = false, CreateNoWindow = true,
-                    RedirectStandardInput = true, RedirectStandardOutput = true,
-                    StandardOutputEncoding = Encoding.UTF8,
-                }))
-                {
-                    if (process == null) return result;
-                    process.StandardInput.Write(request);
-                    process.StandardInput.Close();
-                    string line;
-                    while ((line = process.StandardOutput.ReadLine()) != null)
-                    {
-                        var message = Parse(line);
-                        if (message == null || !message.TryGetValue("winsock", out var values) ||
-                            !(values is Dictionary<string, object> table)) continue;
-                        foreach (var pair in table)
-                        {
-                            var value = pair.Value == null ? 0 : Convert.ToInt32(pair.Value);
-                            result[pair.Key] = value > 0 ? (int?)value : null;   // a 0 ms handshake is not a route
-                        }
-                    }
-                    process.WaitForExit(5000);
-                }
-            }
-            catch
-            {
-                // a failed probe is an empty answer, never a broken window
-            }
-            return result;
-        }
-
-        /// <summary>The probe helper under the game's name. Kept in the plugin's own folder —
-        /// putting a lookalike in the game's install directory would be a much worse idea.</summary>
-        static string Disguised(string home)
-        {
-            var directory = Folder(home);
-            Directory.CreateDirectory(directory);
-            var exe = Path.Combine(directory, "Helldivers2.exe");
-            var assembly = typeof(Helper).Assembly;
-            byte[] bytes;
-            using (var resource = assembly.GetManifestResourceStream(Resource))
-            {
-                if (resource == null) throw new InvalidOperationException(Resource + " is not in this plugin");
-                using (var memory = new MemoryStream())
-                {
-                    resource.CopyTo(memory);
-                    bytes = memory.ToArray();
-                }
-            }
-            // this file has a fixed name, so a newer helper can have exactly the same length:
-            // compare the bytes, not the size, or a stale probe keeps answering 0 ms forever
-            if (File.Exists(exe) && File.ReadAllBytes(exe).SequenceEqual(bytes)) return exe;
-            var temporary = exe + ".tmp";
-            File.WriteAllBytes(temporary, bytes);
-            if (File.Exists(exe)) File.Delete(exe);
-            File.Move(temporary, exe);
-            return exe;
         }
 
         /// <summary>The helper of this version, written beside the manager's settings when it is

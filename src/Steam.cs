@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
+using System.Web.Script.Serialization;
 using Microsoft.Win32;
 
 namespace Hd2Qd.LobbyBrowser
@@ -58,6 +59,16 @@ namespace Hd2Qd.LobbyBrowser
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         [return: MarshalAs(UnmanagedType.I1)] delegate bool ResultFn(IntPtr self, ulong call, IntPtr buffer, int size, int expected, out byte failed);
 
+        // ISteamNetworkingUtils: Steam's own, real measurements to its relay POPs. Optional —
+        // an older steam_api64.dll simply has no such exports and the ICMP fallback stays.
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate void NetInitFn(IntPtr self);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        [return: MarshalAs(UnmanagedType.I1)] delegate bool NetFreshFn(IntPtr self, float maxAge);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate int NetPingFn(IntPtr self, uint pop, IntPtr via);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate int NetDirectFn(IntPtr self, uint pop);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate int NetCountFn(IntPtr self);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate int NetListFn(IntPtr self, uint[] list, int size);
+
         static readonly object One = new object();
         static Steam _instance;
         static bool _tried;
@@ -99,6 +110,107 @@ namespace Hd2Qd.LobbyBrowser
             }
         }
 
+        /// <summary>A three- or four-character POP code packed the way Steam packs it. The fourth
+        /// character lives in the high byte — "bom2" is not "bom" (steamnetworkingtypes.h).</summary>
+        internal static uint PopId(string code)
+        {
+            if (string.IsNullOrEmpty(code)) return 0;
+            var id = (uint)(byte)code[0] << 16;
+            if (code.Length > 1)
+            {
+                id |= (uint)(byte)code[1] << 8;
+                if (code.Length > 2)
+                {
+                    id |= (byte)code[2];
+                    if (code.Length > 3) id |= (uint)(byte)code[3] << 24;
+                }
+            }
+            return id;
+        }
+
+        /// <summary>Steam's measured ping (ms) to each known relay POP, by packed POP id.
+        /// GetDirectPingToPOP is the same kind of measurement the ICMP column tried to make;
+        /// GetPingToDataCenter is Steam's best route through the relay network. Both are real
+        /// measurements made by Steam, not a local TCP accept. Null when unavailable.</summary>
+        internal static Dictionary<uint, int> Pings()
+        {
+            var steam = _instance;
+            if (steam == null || !steam.Ok || steam._net == IntPtr.Zero) return null;
+            try
+            {
+                if (steam._netFresh != null) steam._netFresh(steam._net, 60);   // refresh if stale, never block
+                var count = steam._netCount != null ? steam._netCount(steam._net) : 0;
+                if (count <= 0 || steam._netList == null) return null;
+                var list = new uint[count];
+                var got = steam._netList(steam._net, list, list.Length);
+                var result = new Dictionary<uint, int>();
+                for (var i = 0; i < got && i < list.Length; i++)
+                {
+                    var id = list[i];
+                    var ms = steam._netDirect != null ? steam._netDirect(steam._net, id) : 0;
+                    if (ms <= 0 && steam._netPing != null) ms = steam._netPing(steam._net, id, IntPtr.Zero);
+                    if (ms > 0) result[id] = ms;
+                }
+                return result.Count > 0 ? result : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        static Dictionary<string, List<uint>> _popRegions;
+
+        /// <summary>The region table as POP ids, read from the same sdr_pops.json the ICMP
+        /// fallback uses. Kept here so the helper can turn Steam's measurements into region
+        /// latencies while its session is still up, and so Verify can check the encoding offline.</summary>
+        internal static Dictionary<string, List<uint>> PopRegions()
+        {
+            if (_popRegions != null) return _popRegions;
+            var table = new Dictionary<string, List<uint>>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                using (var reader = new StreamReader(typeof(Steam).Assembly.GetManifestResourceStream("Data.sdr_pops.json")))
+                {
+                    var data = new JavaScriptSerializer { MaxJsonLength = int.MaxValue }
+                        .Deserialize<Dictionary<string, object>>(reader.ReadToEnd());
+                    foreach (var pair in data)
+                    {
+                        var ids = new List<uint>();
+                        if (pair.Value is System.Collections.IList list)
+                            foreach (var node in list)
+                                if (node is Dictionary<string, object> d && d.TryGetValue("id", out var value)
+                                    && value is string code && code.Length > 0) ids.Add(PopId(code));
+                        if (ids.Count > 0) table[pair.Key] = ids;
+                    }
+                }
+            }
+            catch
+            {
+                // no table: no Steam region latencies, the manager's ICMP probes still work
+            }
+            _popRegions = table;
+            return table;
+        }
+
+        /// <summary>Steam's own measured latency (ms) to the closest relay of each region. Called
+        /// in the helper, before SteamAPI_Shutdown: only that process has a Steam session. Null
+        /// when the DLL has no NetworkingUtils or Steam gathered no data in time.</summary>
+        internal static Dictionary<string, int> RegionPings()
+        {
+            var pings = Pings();
+            if (pings == null) return null;
+            var table = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            foreach (var pair in PopRegions())
+            {
+                var best = 0;
+                foreach (var id in pair.Value)
+                    if (pings.TryGetValue(id, out var ms) && ms > 0 && (best == 0 || ms < best)) best = ms;
+                if (best > 0) table[pair.Key] = best;
+            }
+            return table.Count > 0 ? table : null;
+        }
+
         /// <summary>SteamAPI_Shutdown, and a moment for the pump thread to call it: a process the
         /// Steam client still holds would be one it may end with the game.</summary>
         internal static void Stop()
@@ -113,10 +225,16 @@ namespace Hd2Qd.LobbyBrowser
         Thread _pump;
         volatile bool _stop;
 
-        IntPtr _module, _matchmaking, _friends, _user, _utils;
+        IntPtr _module, _matchmaking, _friends, _user, _utils, _net;
         InitFlatFn _init;
         VoidFn _runCallbacks, _shutdown;
-        InterfaceFn _getMatchmaking, _getFriends, _getUser, _getUtils;
+        InterfaceFn _getMatchmaking, _getFriends, _getUser, _getUtils, _getNet;
+        NetInitFn _netInit;
+        NetFreshFn _netFresh;
+        NetPingFn _netPing;
+        NetDirectFn _netDirect;
+        NetCountFn _netCount;
+        NetListFn _netList;
         AddDistanceFn _addDistance;
         AddCountFn _addCount;
         AddNumberFn _addNumber;
@@ -210,6 +328,19 @@ namespace Hd2Qd.LobbyBrowser
             _requestInfo = Fn<RequestInfoFn>("SteamAPI_ISteamFriends_RequestUserInformation");
             _completed = Fn<CompletedFn>("SteamAPI_ISteamUtils_IsAPICallCompleted");
             _result = Fn<ResultFn>("SteamAPI_ISteamUtils_GetAPICallResult");
+            // the game's newer steam_api64.dll exports the v004 getter under this name; older
+            // SDKs use v003. Without either, Pings() simply returns null and ICMP stays.
+            _getNet = MaybeFn<InterfaceFn>("SteamAPI_SteamNetworkingUtils_v003");
+            if (_getNet == null) _getNet = MaybeFn<InterfaceFn>("SteamAPI_SteamNetworkingUtils_SteamAPI_v004");
+            if (_getNet != null)
+            {
+                _netInit = MaybeFn<NetInitFn>("SteamAPI_ISteamNetworkingUtils_InitRelayNetworkAccess");
+                _netFresh = MaybeFn<NetFreshFn>("SteamAPI_ISteamNetworkingUtils_CheckPingDataUpToDate");
+                _netPing = MaybeFn<NetPingFn>("SteamAPI_ISteamNetworkingUtils_GetPingToDataCenter");
+                _netDirect = MaybeFn<NetDirectFn>("SteamAPI_ISteamNetworkingUtils_GetDirectPingToPOP");
+                _netCount = MaybeFn<NetCountFn>("SteamAPI_ISteamNetworkingUtils_GetPOPCount");
+                _netList = MaybeFn<NetListFn>("SteamAPI_ISteamNetworkingUtils_GetPOPList");
+            }
 
             var message = Marshal.AllocHGlobal(1024);
             try
@@ -228,6 +359,8 @@ namespace Hd2Qd.LobbyBrowser
             _friends = _getFriends();
             _user = _getUser();
             _utils = _getUtils();
+            _net = _getNet != null ? _getNet() : IntPtr.Zero;
+            if (_net != IntPtr.Zero && _netInit != null) _netInit(_net);   // start the real ping measurement
             SelfId = _getSteamId(_user);
             Ok = true;
         }
@@ -239,6 +372,12 @@ namespace Hd2Qd.LobbyBrowser
             var p = GetProcAddress(_module, name);
             if (p == IntPtr.Zero) throw new MissingMethodException(name + " is missing from " + Path.GetFileName(DllPath));
             return (T)(object)Marshal.GetDelegateForFunctionPointer(p, typeof(T));
+        }
+
+        T MaybeFn<T>(string name) where T : class
+        {
+            var p = GetProcAddress(_module, name);
+            return p == IntPtr.Zero ? null : (T)(object)Marshal.GetDelegateForFunctionPointer(p, typeof(T));
         }
 
         static string Utf8(IntPtr text)

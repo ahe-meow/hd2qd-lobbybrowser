@@ -189,6 +189,10 @@ namespace Hd2Qd.LobbyBrowser
         /// <summary>The Steam ID of the player whose client ran the scan: what a join names when
         /// the lobby publishes no Steam host (a crossplay lobby).</summary>
         internal string Self = "0";
+
+        /// <summary>Steam's own relay latency (ms) per region, measured by the helper while its
+        /// Steam session was up. Empty when Steam had no ping data — those regions use ICMP.</summary>
+        internal Dictionary<string, int> SteamPings = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
     }
 
     internal static class JoinLink
