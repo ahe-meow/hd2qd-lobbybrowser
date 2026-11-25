@@ -36,7 +36,10 @@ and hands the lobby to the running-game callback, in a process whose Steamworks 
 The ping column is this PC's latency to the **Steam relay of the lobby's region** (the closest of
 the region's nodes, `sdr_pops.json`, ICMP, five minutes of cache), the same measure the original
 program uses — a lobby never publishes its own address. It is measured beside the scan, in the
-manager, so it opens no Steam session.
+manager, so it opens no Steam session. If a game accelerator's virtual adapter is up (奇游 or any
+TUN/TAP one), the echo is sent **from that adapter's address**, so the number follows the
+accelerated route; a probe that gets no answer falls back to the default route. The adapter is
+looked up when the plugin loads — start the accelerator before opening the window.
 
 The **platform** column is the original's PlayFab lookup: a crossplay lobby names its host by
 PlayFab entity id (lobby key 3), and that id's public profile object `testament_backing_platform`
@@ -181,6 +184,8 @@ it. `tests\Verify.exe <dll>` checks it against the plugin contract of
 
 延迟是该区域 **Steam 中继**的延迟（该区域最优节点，`sdr_pops.json`，ICMP，缓存五分钟），与原项目同一算法；
 大厅从不公布自己的地址。延迟在管理器进程里与扫描并行测量，不占用 Steam 会话。
+如果检测到加速器（奇游或其他 TUN/TAP）的**虚拟网卡**已启用，探测会以该网卡的地址为源地址发出，
+从而走加速线路；探测无应答时回退默认路由。网卡在插件加载时识别，请先开加速器再打开大厅浏览器。
 
 **平台**列用的是原项目的 PlayFab 查询：跨平台房间用 PlayFab 实体 id 标识房主（大厅键 3），该 id 的公开资料对象
 `testament_backing_platform` 给出 0=PlayStation、1=Steam、4=Xbox（`testament_platform_user_name` 顺带补上房主名）。

@@ -3,6 +3,9 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Net;
+using System.Net.NetworkInformation;
+using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Web.Script.Serialization;
@@ -15,7 +18,13 @@ namespace Hd2Qd.LobbyBrowser
     /// address is never published, so the region is the closest a client can get.
     ///
     /// Measured here, in the manager's process: ICMP needs no Steamworks, so no Steam session is
-    /// opened for it, and the answers are kept five minutes across refreshes.</summary>
+    /// opened for it, and the answers are kept five minutes across refreshes.
+    ///
+    /// A game accelerator (奇游 and other TUN/TAP ones) puts the game on a virtual adapter while
+    /// a bare ICMP echo would leave by the default route. When such an adapter is up, its IPv4
+    /// address becomes the source of the echo, so the probe uses the accelerated route too; a
+    /// probe that gets no answer is retried on the default route rather than leaving the column
+    /// empty.</summary>
     internal static class Ping
     {
         const int TimeoutMs = 900;
@@ -33,6 +42,54 @@ namespace Hd2Qd.LobbyBrowser
         [DllImport("iphlpapi.dll", SetLastError = true)]
         static extern uint IcmpSendEcho(IntPtr handle, uint address, byte[] request, ushort requestSize,
             IntPtr options, byte[] reply, uint replySize, uint timeout);
+
+        // the same echo, but out of a chosen local address: an accelerator's virtual adapter
+        [DllImport("iphlpapi.dll", SetLastError = true)]
+        static extern uint IcmpSendEcho2Ex(IntPtr handle, IntPtr evt, IntPtr apc, IntPtr context,
+            uint source, uint address, byte[] request, ushort requestSize,
+            IntPtr options, byte[] reply, uint replySize, uint timeout);
+
+        static readonly Lazy<uint> Source = new Lazy<uint>(FindSource);
+
+        /// <summary>A name that names the accelerator itself, before the generic TUN/TAP ones.</summary>
+        static bool Vendor(string name)
+        {
+            var s = (name ?? "").ToLowerInvariant();
+            return s.Contains("奇游") || s.Contains("qiyou") || s.Contains("加速器") || s.Contains("accelerator");
+        }
+
+        /// <summary>Also accepts the generic names accelerators give their virtual adapters.</summary>
+        internal static bool Accelerator(string name)
+        {
+            var s = (name ?? "").ToLowerInvariant();
+            return Vendor(s) || s.Contains("虚拟网卡") || s.Contains("tun") || s.Contains("tap");
+        }
+
+        static uint FindSource()
+        {
+            try
+            {
+                var up = NetworkInterface.GetAllNetworkInterfaces()
+                    .Where(n => n.OperationalStatus == OperationalStatus.Up &&
+                                n.NetworkInterfaceType != NetworkInterfaceType.Loopback).ToList();
+                // a named accelerator first; any TUN/TAP fallback second
+                foreach (var pass in new[] { true, false })
+                    foreach (var nic in up)
+                    {
+                        var name = nic.Name + " " + nic.Description;
+                        if ((pass ? Vendor(name) : Accelerator(name)) == false) continue;
+                        if (pass == false && Vendor(name)) continue;
+                        foreach (var address in nic.GetIPProperties().UnicastAddresses)
+                            if (address.Address.AddressFamily == AddressFamily.InterNetwork)
+                                return BitConverter.ToUInt32(address.Address.GetAddressBytes(), 0);
+                    }
+            }
+            catch
+            {
+                // no adapter list: keep the default route
+            }
+            return 0;
+        }
 
         static Dictionary<string, List<string>> Nodes()
         {
@@ -140,7 +197,21 @@ namespace Hd2Qd.LobbyBrowser
             {
                 var payload = System.Text.Encoding.ASCII.GetBytes("hd2qd-lobbybrowser");
                 var reply = new byte[64];
-                var count = IcmpSendEcho(handle, target, payload, (ushort)payload.Length, IntPtr.Zero, reply, (uint)reply.Length, TimeoutMs);
+                var source = Source.Value;
+                uint count = 0;
+                if (source != 0)
+                    try
+                    {
+                        count = IcmpSendEcho2Ex(handle, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, source, target,
+                            payload, (ushort)payload.Length, IntPtr.Zero, reply, (uint)reply.Length, TimeoutMs);
+                    }
+                    catch
+                    {
+                        // an older Windows without this entry point: use the default route
+                    }
+                if (count == 0)
+                    count = IcmpSendEcho(handle, target, payload, (ushort)payload.Length, IntPtr.Zero,
+                        reply, (uint)reply.Length, TimeoutMs);   // a tunnel need not carry ICMP
                 if (count == 0) return -1;
                 var status = BitConverter.ToUInt32(reply, 4);
                 return status == 0 ? BitConverter.ToInt32(reply, 8) : -1;

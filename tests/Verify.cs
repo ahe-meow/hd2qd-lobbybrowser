@@ -157,6 +157,20 @@ namespace Hd2Qd.Verify
             }
         }
 
+        /// <summary>The accelerator adapter is found by its name: the vendor's own (奇游) or a
+        /// generic TUN/TAP name, never an ordinary Ethernet/Wi-Fi adapter.</summary>
+        static void CheckPingRoute(Assembly asm)
+        {
+            var ping = asm.GetType("Hd2Qd.LobbyBrowser.Ping");
+            var match = ping != null ? ping.GetMethod("Accelerator", BindingFlags.NonPublic | BindingFlags.Static) : null;
+            if (match == null) { Check("accelerator adapter rule", false, "Ping.Accelerator missing"); return; }
+            var qiyou = (bool)match.Invoke(null, new object[] { "奇游加速器虚拟网卡" });
+            var tap = (bool)match.Invoke(null, new object[] { "TAP-Windows Adapter V9" });
+            var lan = (bool)match.Invoke(null, new object[] { "以太网" });
+            Check("accelerator adapter rule", qiyou && tap && !lan,
+                "qiyou=" + qiyou + " tap=" + tap + " lan=" + lan);
+        }
+
         /// <summary>The language rule: a manager tag maps onto the two this plugin has, the
         /// player's choice is read from its own file and beats the manager's, and following
         /// reads the manager's gui.json as it stands.</summary>
@@ -267,6 +281,7 @@ namespace Hd2Qd.Verify
 
             CheckPresets(asm);
             CheckPicker(asm);
+            CheckPingRoute(asm);
             CheckLanguage(asm);
 
             // ---- a live scan through the plugin's own command ----
