@@ -185,11 +185,23 @@ namespace Hd2Qd.Verify
                 Directory.CreateDirectory(home);
                 var args = new object[] { home, new[] { "127.0.0.1" } };
                 var off = winsock.Invoke(null, args) as System.Collections.IDictionary;
-                Directory.CreateDirectory(Path.Combine(home, "lobbybrowser"));
-                File.WriteAllText(Path.Combine(home, "lobbybrowser", "winsock.txt"), "on");
+                var folder = Path.Combine(home, "lobbybrowser");
+                Directory.CreateDirectory(folder);
+                byte[] embedded;
+                using (var stream = asm.GetManifestResourceStream("HD2QD.LobbyBrowser.Helper.exe"))
+                using (var memory = new MemoryStream())
+                {
+                    stream.CopyTo(memory);
+                    embedded = memory.ToArray();
+                }
+                // a stale copy of exactly the same length must still be replaced
+                var disguised = Path.Combine(folder, "Helldivers2.exe");
+                File.WriteAllBytes(disguised, new byte[embedded.Length]);
+                File.WriteAllText(Path.Combine(folder, "winsock.txt"), "on");
                 var on = winsock.Invoke(null, args) as System.Collections.IDictionary;
                 Check("winsock probe is opt-in", off != null && off.Count == 0 && on != null && on.Contains("127.0.0.1"),
                     "off=" + (off == null ? -1 : off.Count) + " on=" + (on == null ? -1 : on.Count));
+                Check("winsock probe replaces a stale helper", File.ReadAllBytes(disguised).SequenceEqual(embedded));
             }
             catch (Exception e)
             {

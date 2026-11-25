@@ -12,7 +12,7 @@
     <AssemblyName>HD2QD.LobbyBrowser.Helper</AssemblyName>
     <RootNamespace>Hd2Qd.LobbyBrowser</RootNamespace>
     <PlatformTarget>x64</PlatformTarget>
-    <Version>1.7.6</Version>
+    <Version>1.7.7</Version>
     <Product>HD2QD Lobby Browser</Product>
     <Company>ahe-meow</Company>
     <Copyright>MIT License</Copyright>

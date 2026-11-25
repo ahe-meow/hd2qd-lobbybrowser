@@ -233,16 +233,23 @@ namespace Hd2Qd.LobbyBrowser
             Directory.CreateDirectory(directory);
             var exe = Path.Combine(directory, "Helldivers2.exe");
             var assembly = typeof(Helper).Assembly;
+            byte[] bytes;
             using (var resource = assembly.GetManifestResourceStream(Resource))
             {
                 if (resource == null) throw new InvalidOperationException(Resource + " is not in this plugin");
-                var length = (int)resource.Length;
-                if (File.Exists(exe) && new FileInfo(exe).Length == length) return exe;
-                var temporary = exe + ".tmp";
-                using (var file = File.Create(temporary)) resource.CopyTo(file);
-                if (File.Exists(exe)) File.Delete(exe);
-                File.Move(temporary, exe);
+                using (var memory = new MemoryStream())
+                {
+                    resource.CopyTo(memory);
+                    bytes = memory.ToArray();
+                }
             }
+            // this file has a fixed name, so a newer helper can have exactly the same length:
+            // compare the bytes, not the size, or a stale probe keeps answering 0 ms forever
+            if (File.Exists(exe) && File.ReadAllBytes(exe).SequenceEqual(bytes)) return exe;
+            var temporary = exe + ".tmp";
+            File.WriteAllBytes(temporary, bytes);
+            if (File.Exists(exe)) File.Delete(exe);
+            File.Move(temporary, exe);
             return exe;
         }
 
