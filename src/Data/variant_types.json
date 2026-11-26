@@ -1,0 +1,119 @@
+{
+ "types": {
+  "predator": [
+   "掠食变种",
+   "Predator Strain"
+  ],
+  "spore": [
+   "孢裂变种",
+   "Spore Burst Strain"
+  ],
+  "rupture": [
+   "裂地变种",
+   "Rupture Strain"
+  ],
+  "jet": [
+   "喷气旅",
+   "Jet Brigade"
+  ],
+  "incineration": [
+   "灼烧旅",
+   "Incineration Corps"
+  ],
+  "dragonroach": [
+   "蟑龙",
+   "Dragonroaches"
+  ],
+  "hivelord": [
+   "霸王虫",
+   "Hive Lords"
+  ],
+  "cyborg": [
+   "半机械人",
+   "Cyborgs"
+  ],
+  "mindless": [
+   "无智群",
+   "Mindless Masses"
+  ],
+  "appropriator": [
+   "侵占者",
+   "Appropriators"
+  ],
+  "votesnatch": [
+   "偷票者",
+   "Vote Snatchers"
+  ],
+  "invasion": [
+   "入侵舰队",
+   "Invasion Fleet"
+  ],
+  "greathost": [
+   "大群",
+   "The Great Host"
+  ],
+  "strider_surge": [
+   "工厂机兵激增",
+   "Factory Strider Surge"
+  ],
+  "impaler_rampage": [
+   "穿刺虫暴走",
+   "Impaler Rampage"
+  ],
+  "spore_scav_rampage": [
+   "孢裂食腐虫暴走",
+   "Spore Burst Scavenger Rampage"
+  ],
+  "charger_rampage": [
+   "冲锋虫暴走",
+   "Charger Rampage"
+  ],
+  "heavy_armor_surge": [
+   "重甲激增",
+   "Heavy Armor Surge"
+  ],
+  "hulk_surge": [
+   "浩克激增",
+   "Hulk Surge"
+  ],
+  "devastator_surge": [
+   "蹂躏者激增",
+   "Devastator Surge"
+  ]
+ },
+ "effects": {
+  "1202": "jet",
+  "1203": "jet",
+  "1243": "predator",
+  "1245": "predator",
+  "1244": "spore",
+  "1386": "spore",
+  "1248": "incineration",
+  "1249": "incineration",
+  "1303": "rupture",
+  "1310": "rupture",
+  "1306": "dragonroach",
+  "1309": "dragonroach",
+  "1307": "hivelord",
+  "1308": "hivelord",
+  "1360": "cyborg",
+  "1361": "cyborg",
+  "1377": "mindless",
+  "1378": "mindless",
+  "1379": "appropriator",
+  "1380": "appropriator",
+  "1402": "votesnatch",
+  "1403": "votesnatch",
+  "1413": "invasion",
+  "1414": "invasion",
+  "1269": "greathost",
+  "1283": "strider_surge",
+  "1285": "impaler_rampage",
+  "1288": "spore_scav_rampage",
+  "1293": "charger_rampage",
+  "1355": "heavy_armor_surge",
+  "1357": "hulk_surge",
+  "1359": "devastator_surge"
+ },
+ "source": "galacticEffectId -> 变种；id 表来自 hd2api planetEffects（游戏数据），保留敌方变种/群袭类效果"
+}

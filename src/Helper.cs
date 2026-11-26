@@ -168,6 +168,8 @@ namespace Hd2Qd.LobbyBrowser
                 result.Planets = Convert.ToInt32(planets);
             if (message.TryGetValue("self", out var self) && self != null)
                 result.Self = Convert.ToString(self);
+            if (message.TryGetValue("selfLobby", out var mine) && mine != null)
+                result.SelfLobby = Convert.ToString(mine);
             if (message.TryGetValue("steamPings", out var pings) && pings is Dictionary<string, object> table)
                 foreach (var pair in table)
                     if (pair.Value != null && int.TryParse(Convert.ToString(pair.Value), out var ms) && ms > 0)

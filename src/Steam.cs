@@ -45,6 +45,8 @@ namespace Hd2Qd.LobbyBrowser
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate IntPtr DataFn(IntPtr self, ulong lobby, [MarshalAs(UnmanagedType.LPUTF8Str)] string key);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate ulong SteamIdFn(IntPtr self);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate IntPtr PersonaFn(IntPtr self, ulong steamId);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate IntPtr RichPresenceFn(IntPtr self, ulong steamId,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string key);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         [return: MarshalAs(UnmanagedType.I1)] delegate bool RequestDataFn(IntPtr self, ulong lobby);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -246,6 +248,7 @@ namespace Hd2Qd.LobbyBrowser
         SteamIdFn _getSteamId;
         TicketFn _ticket;
         PersonaFn _persona;
+        RichPresenceFn _richPresence;
         RequestInfoFn _requestInfo;
         CompletedFn _completed;
         ResultFn _result;
@@ -325,6 +328,7 @@ namespace Hd2Qd.LobbyBrowser
             _getSteamId = Fn<SteamIdFn>("SteamAPI_ISteamUser_GetSteamID");
             _ticket = Fn<TicketFn>("SteamAPI_ISteamUser_GetAuthSessionTicket");
             _persona = Fn<PersonaFn>("SteamAPI_ISteamFriends_GetFriendPersonaName");
+            _richPresence = Fn<RichPresenceFn>("SteamAPI_ISteamFriends_GetFriendRichPresence");
             _requestInfo = Fn<RequestInfoFn>("SteamAPI_ISteamFriends_RequestUserInformation");
             _completed = Fn<CompletedFn>("SteamAPI_ISteamUtils_IsAPICallCompleted");
             _result = Fn<ResultFn>("SteamAPI_ISteamUtils_GetAPICallResult");
@@ -538,6 +542,23 @@ namespace Hd2Qd.LobbyBrowser
         /// crossplay, or the host is on Steam); empty otherwise. Asked for, then looked for until
         /// every name is there or a moment has passed — a fixed sleep waited for the slowest
         /// answer even when they were all in.</summary>
+        /// <summary>V28: the lobby Steam says this player is in. HD2 writes "+connect_lobby
+        /// &lt;id&gt;" into its own rich presence; that is the only public signal a scan can read
+        /// without joining. Empty when there is no game session or Steam did not publish it.</summary>
+        internal static string SelfLobby()
+        {
+            var steam = _instance;
+            if (steam == null || !steam.Ok || steam._richPresence == null || steam._friends == IntPtr.Zero) return "";
+            try
+            {
+                var value = steam._richPresence(steam._friends, steam.SelfId, "connect");
+                var parts = Utf8(value).Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length >= 2 && parts[0] == "+connect_lobby") return parts[1];
+            }
+            catch { }
+            return "";
+        }
+
         internal void Names(IList<Room> rooms)
         {
             var pending = new List<Room>();

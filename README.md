@@ -1,11 +1,13 @@
 # HD2QD Lobby Browser
 
 A plugin of [HD2 Mod Quick Deploy](https://github.com/pat-pat-patrick/hd2-mod-cli): the public
-lobbies of Helldivers 2, listed in a window of the manager, so you pick the one you join instead
-of the game's random matchmaking.
+lobbies of Helldivers 2, listed **as a tab of the manager's window** (Quick Deploy 0.25.0 and
+later), so you pick the one you join instead of the game's random matchmaking. Older managers and
+the single-file program still open it in a window of its own.
 
-Adapted from [HD2LobbyBrowser](https://github.com/QLongYan/HD2LobbyBrowser) (MIT) — the lobby scan,
-the lobby keys and the name tables are that program's, ported to a manager plugin.
+Adapted from [HD2LobbyBrowser](https://github.com/ahe-meow/HD2LobbyBrowser) (MIT) — the lobby scan,
+the lobby keys and the name tables are that program's, ported to a manager plugin. Features are
+kept in step with upstream; this build carries V26–V30.
 
 ## What it shows
 
@@ -18,8 +20,18 @@ The age column uses the lobby's own creation timestamp and keeps up with the clo
 window is open: `<1 min`, `N min ago` up to 15, `>15 min` after that, or `Unknown` when Steam
 publishes no usable time.
 
+Upstream V26–V30 additions: **Map type** (from the mission hash; a room with several scenes
+matches any selected type) and **Variant** (planet-level war effects, cached for five minutes)
+join **Difficulty** as tickable multi-selects; the planet picker groups by sector, so one tick
+takes a whole sector. All three filter buttons use the same search / select-all / invert panel,
+and only one panel or menu stays open at a time. The count above the table follows the filters,
+not the raw scan. The room you are already in is pinned to the top, tinted gold, and survives a
+refresh; its button reads **You are here**. When the community planet API is unavailable or
+returns an all-zero table, the planet choice falls back to the game's own WarSeason status and
+caches it, instead of degenerating into one worldwide query.
+
 The filter row is one line of three groups, a hairline between them: what opens something
-(Refresh, Planet, Difficulty, Mission, Presets), the three fronts as chips, and the four switches —
+(Refresh, Planet, Difficulty, Mission, Map, Variant, Presets), the three fronts as chips, and the four switches —
 each a short word on the row (Public, Session, Not full, SOS) with the whole sentence in its tip,
 so the row does not wrap into a ragged second line. A **planet** picked in the picker (search;
 **Select all** / **Invert** for the rows the search shows; a front's chip takes all of its planets)

@@ -40,6 +40,9 @@ namespace Hd2Qd.LobbyBrowser
                 // both the PlayFab ticket and Steam's own relay measurements need the session:
                 // take them now, then close Steam so the seconds it counts as game time stay short
                 var ticket = Steam.Ticket();
+                // V28: rich presence is only readable while the Steam session is up; read it
+                // before Stop along with the ticket and the relay pings.
+                var selfLobby = Steam.SelfLobby();
                 Say(new Dictionary<string, object> { ["stage"] = "pings" });
                 var pings = Steam.RegionPings();
                 Steam.Stop();
@@ -50,6 +53,7 @@ namespace Hd2Qd.LobbyBrowser
                 {
                     ["planets"] = result.Planets,
                     ["self"] = result.Self,
+                    ["selfLobby"] = selfLobby,
                     ["rooms"] = result.Rooms.ConvertAll(room => (object)room.ToJson()),
                     ["steamPings"] = pings ?? new Dictionary<string, int>(),
                     ["error"] = result.Error,

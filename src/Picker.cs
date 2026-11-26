@@ -37,7 +37,7 @@ namespace Hd2Qd.LobbyBrowser
                 if (Matches(item, needle)) item.On = select || !item.On;
         }
 
-        internal static void Show(FrameworkElement anchor, string title, string hint,
+        internal static Popup Show(FrameworkElement anchor, string title, string hint,
             string clear, string all, string invert, string empty, List<Item> items, Action changed)
         {
             var popup = new Popup
@@ -160,6 +160,7 @@ namespace Hd2Qd.LobbyBrowser
             popup.Opened += (s, e) => { search.Focus(); Paint(); };
             Paint();
             popup.IsOpen = true;
+            return popup;
         }
     }
 }

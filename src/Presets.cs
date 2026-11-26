@@ -14,6 +14,9 @@ namespace Hd2Qd.LobbyBrowser
         internal List<int> Planets = new List<int>();
         internal List<string> Fronts = new List<string>();
         internal int Difficulty;
+        internal List<int> Difficulties = new List<int>();
+        internal List<int> Maps = new List<int>();
+        internal List<string> Vars = new List<string>();
         internal bool PublicOnly = true;
         internal bool HideNoSession = true;
         internal bool HideFull;
@@ -28,6 +31,9 @@ namespace Hd2Qd.LobbyBrowser
             ["planets"] = Planets.ConvertAll(p => (object)p),
             ["fronts"] = new List<object>(Fronts),
             ["difficulty"] = Difficulty,
+            ["difficulties"] = Difficulties.ConvertAll(d => (object)d),
+            ["maps"] = Maps.ConvertAll(m => (object)m),
+            ["vars"] = new List<object>(Vars),
             ["publicOnly"] = PublicOnly,
             ["hideNoSession"] = HideNoSession,
             ["hideFull"] = HideFull,
@@ -42,6 +48,14 @@ namespace Hd2Qd.LobbyBrowser
             var preset = new Preset();
             preset.Name = Text(d, "name");
             preset.Difficulty = Number(d, "difficulty");
+            foreach (var key in new[] { "difficulties", "maps" })
+                if (d.TryGetValue(key, out var values) && values is System.Collections.IList entries)
+                {
+                    var target = key == "maps" ? preset.Maps : preset.Difficulties;
+                    foreach (var v in entries) if (v != null) target.Add(Convert.ToInt32(v));
+                }
+            if (d.TryGetValue("vars", out var vars) && vars is System.Collections.IList varList)
+                foreach (var v in varList) if (v != null) preset.Vars.Add(Convert.ToString(v));
             preset.PublicOnly = Flag(d, "publicOnly", true);
             preset.HideNoSession = Flag(d, "hideNoSession", true);
             preset.HideFull = Flag(d, "hideFull", false);

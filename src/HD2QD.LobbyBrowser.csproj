@@ -1,7 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- HD2QD.LobbyBrowser.dll: a plugin of HD2 Mod Quick Deploy, a window of its own
-       (BrowserWindow.cs). .NET Framework 4.8, as the manager; the file name must be
+  <!-- HD2QD.LobbyBrowser.dll: a plugin of HD2 Mod Quick Deploy, shown as a tab of the
+       manager's window (a window on older managers). .NET Framework 4.8, as the manager;
+       the file name must be
        HD2QD.<name>.dll. It shares no types with the manager: strings, numbers, bools,
        delegates and Json shapes only.
 
@@ -16,7 +17,7 @@
     <Nullable>disable</Nullable>
     <AssemblyName>HD2QD.LobbyBrowser</AssemblyName>
     <RootNamespace>Hd2Qd.LobbyBrowser</RootNamespace>
-    <Version>1.8.7</Version>
+    <Version>1.9.0</Version>
     <Product>HD2QD Lobby Browser</Product>
     <Company>ahe-meow</Company>
     <Copyright>MIT License</Copyright>
@@ -45,6 +46,7 @@
     <Compile Include="Plugin.cs" />
     <Compile Include="Tables.cs" />
     <Compile Include="Theme.cs" />
+    <Compile Include="War.cs" />
     <Compile Include="Words.cs" />
   </ItemGroup>
 

@@ -409,6 +409,44 @@ namespace Hd2Qd.Verify
         }
 
         /// <summary>A settings folder of the test's own: the manager's own is not written to.</summary>
+        /// <summary>Quick Deploy 0.25.0 opens window plugins as tabs. The plugin asks for one when
+        /// host["tab"] is there and keeps its handle so a second Open shows the same tab; older
+        /// managers and the standalone build still get host["window"]. Also checks that the
+        /// V26–V30 fields survive the helper's JSON round trip.</summary>
+        static void CheckTabAndUpstream(Assembly asm, string dll)
+        {
+            var src = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(dll), "..", "src", "Plugin.cs"));
+            if (File.Exists(src))
+            {
+                var text = File.ReadAllText(src);
+                Check("plugin opens as a tab when offered",
+                    text.Contains("host[\"tab\"]") && text.Contains("showTab") && text.Contains("host[\"window\"]"));
+            }
+            var names = asm.GetManifestResourceNames();
+            foreach (var r in new[] { "Data.env_types.json", "Data.variant_types.json" })
+                Check("resource " + r, names.Contains(r));
+            foreach (var lang in new[] { "en", "zh-CN" })
+            {
+                var stream = names.Contains("Lang." + lang + ".json") ? asm.GetManifestResourceStream("Lang." + lang + ".json") : null;
+                var words = stream == null ? "" : new StreamReader(stream).ReadToEnd();
+                Check(lang + " has the V26–V30 words", words.Contains("filter_map_all") && words.Contains("filter_variant_all")
+                    && words.Contains("filter_difficulty_n") && words.Contains("you_here") && words.Contains("api_official"));
+            }
+            var room = asm.GetType("Hd2Qd.LobbyBrowser.Room", false);
+            Check("room carries map, variant and joined state", room != null
+                && room.GetField("MapTypes", BindingFlags.NonPublic | BindingFlags.Instance) != null
+                && room.GetField("Variants", BindingFlags.NonPublic | BindingFlags.Instance) != null
+                && room.GetProperty("IsMine") != null);
+            var scan = asm.GetType("Hd2Qd.LobbyBrowser.ScanResult", false);
+            Check("joined lobby travels from the helper", scan != null
+                && scan.GetField("SelfLobby", BindingFlags.NonPublic | BindingFlags.Instance) != null);
+            var preset = asm.GetType("Hd2Qd.LobbyBrowser.Preset", false);
+            Check("presets carry the new filters", preset != null
+                && preset.GetField("Maps", BindingFlags.NonPublic | BindingFlags.Instance) != null
+                && preset.GetField("Vars", BindingFlags.NonPublic | BindingFlags.Instance) != null
+                && preset.GetField("Difficulties", BindingFlags.NonPublic | BindingFlags.Instance) != null);
+        }
+
         static string Home()
         {
             var home = Path.Combine(Path.GetTempPath(), "hd2qd-lobbybrowser-verify");
@@ -489,6 +527,7 @@ namespace Hd2Qd.Verify
             CheckProgress(asm);
             CheckAge(asm);
             CheckLanguage(asm);
+            CheckTabAndUpstream(asm, path);
 
             // ---- a live scan through the plugin's own command ----
             if (!offline)

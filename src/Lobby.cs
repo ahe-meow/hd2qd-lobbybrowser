@@ -23,6 +23,11 @@ namespace Hd2Qd.LobbyBrowser
         internal bool Session;
         internal bool Sos;
         internal bool DifficultyGuess;
+        /// <summary>Map types this room's mission can be (one exact, or several possibilities),
+        /// and the star-level variants from the war-state API. HD2LobbyBrowser V27/V28: both are
+        /// "contains any selected" filters, so a room with A/B survives ticking either.</summary>
+        internal List<int> MapTypes = new List<int>();
+        internal List<string> Variants = new List<string>();
         internal string Front;
         internal string Region;
         /// <summary>Host location published by the lobby as keys 22/23, longitude and latitude
@@ -77,6 +82,11 @@ namespace Hd2Qd.LobbyBrowser
         public string PingText { get; set; }
         public string PrivacyText { get; set; }
         public string PlatformText { get; set; }
+        /// <summary>The planet column's second line: sector, map type(s), variant(s). Never a
+        /// separate column — upstream shows these under the planet name too.</summary>
+        public string SubText { get; set; }
+        /// <summary>V28: the lobby this player is in, pinned to the top and tinted gold.</summary>
+        public bool IsMine { get; set; }
 
         /// <summary>The ping column's words: measured, or a dash when the region is unknown.</summary>
         internal void ShowPing() => PingText = !Ping.HasValue ? "—"
@@ -86,6 +96,12 @@ namespace Hd2Qd.LobbyBrowser
         {
             _lang = lang;
             PlanetText = Planet > 0 ? Tables.Planet(Planet, lang) : Words.Get(lang, "no_planet");
+            var sub = new List<string>();
+            var sector = Tables.Sector(Planet, lang);
+            if (!string.IsNullOrEmpty(sector)) sub.Add(sector);
+            foreach (var type in MapTypes) sub.Add(Tables.MapTypeName(type, lang));
+            foreach (var variant in Variants) sub.Add(Tables.VariantName(variant, lang));
+            SubText = string.Join(" · ", sub);
             FrontText = Tables.FrontShort(Front, lang);
             DifficultyText = Difficulty > 0 ? Words.F(lang, "diff_n", Difficulty) : "—";
             MembersText = Members + "/" + (Limit > 0 ? Limit : 4);
@@ -150,6 +166,8 @@ namespace Hd2Qd.LobbyBrowser
             ["lon"] = Lon,
             ["missionHash"] = MissionHash ?? "",
             ["mission"] = Mission ?? "",
+            ["mapTypes"] = MapTypes.ConvertAll(t => (object)t),
+            ["variants"] = Variants.ConvertAll(v => (object)v),
             ["host"] = Host ?? "",
             ["age"] = Age,
             ["created"] = Created,
@@ -178,6 +196,10 @@ namespace Hd2Qd.LobbyBrowser
             room.Lon = Decimal(d, "lon");
             room.MissionHash = Text(d, "missionHash");
             room.Mission = Text(d, "mission");
+            if (d.TryGetValue("mapTypes", out var maps) && maps is System.Collections.IList mapList)
+                foreach (var m in mapList) if (m != null) room.MapTypes.Add(Convert.ToInt32(m, CultureInfo.InvariantCulture));
+            if (d.TryGetValue("variants", out var vars) && vars is System.Collections.IList varList)
+                foreach (var v in varList) if (v != null) room.Variants.Add(Convert.ToString(v, CultureInfo.InvariantCulture));
             room.Host = Text(d, "host");
             room.Age = Number(d, "age", -1);
             room.Created = Long(d, "created", -1);
@@ -209,7 +231,10 @@ namespace Hd2Qd.LobbyBrowser
     {
         internal List<string> Fronts = new List<string>();
         internal List<int> Planets = new List<int>();    // empty: the scan picks the active planets
-        internal int Difficulty;                        // 0: any
+        internal int Difficulty;                        // 0: any (kept for older presets)
+        internal List<int> Difficulties = new List<int>();  // V28: 1–10, any when empty
+        internal List<int> MapTypes = new List<int>();      // V27: 1–5, "contains any"
+        internal List<string> Variants = new List<string>();// V27: variant keys, "contains any"
         internal bool PublicOnly = true;
         internal bool HideNoSession = true;
         internal bool HideFull;
@@ -220,6 +245,9 @@ namespace Hd2Qd.LobbyBrowser
             ["fronts"] = new List<object>(Fronts),
             ["planets"] = Planets.ConvertAll(p => (object)p),
             ["difficulty"] = Difficulty,
+            ["difficulties"] = Difficulties.ConvertAll(d => (object)d),
+            ["mapTypes"] = MapTypes.ConvertAll(m => (object)m),
+            ["variants"] = Variants.ConvertAll(v => (object)v),
             ["publicOnly"] = PublicOnly,
             ["hideNoSession"] = HideNoSession,
             ["hideFull"] = HideFull,
@@ -236,6 +264,12 @@ namespace Hd2Qd.LobbyBrowser
                 foreach (var entry in picked)
                     if (entry != null) filters.Planets.Add(Convert.ToInt32(entry, CultureInfo.InvariantCulture));
             if (d.TryGetValue("difficulty", out var diff) && diff != null) filters.Difficulty = Convert.ToInt32(diff, CultureInfo.InvariantCulture);
+            if (d.TryGetValue("difficulties", out var diffs) && diffs is System.Collections.IList diffList)
+                foreach (var entry in diffList) if (entry != null) filters.Difficulties.Add(Convert.ToInt32(entry, CultureInfo.InvariantCulture));
+            if (d.TryGetValue("mapTypes", out var maps) && maps is System.Collections.IList mapList)
+                foreach (var entry in mapList) if (entry != null) filters.MapTypes.Add(Convert.ToInt32(entry, CultureInfo.InvariantCulture));
+            if (d.TryGetValue("variants", out var variants) && variants is System.Collections.IList variantList)
+                foreach (var entry in variantList) if (entry != null) filters.Variants.Add(Convert.ToString(entry, CultureInfo.InvariantCulture));
             if (d.TryGetValue("publicOnly", out var pub) && pub is bool p) filters.PublicOnly = p;
             if (d.TryGetValue("hideNoSession", out var hide) && hide is bool h) filters.HideNoSession = h;
             if (d.TryGetValue("hideFull", out var full) && full is bool f2) filters.HideFull = f2;
@@ -252,6 +286,10 @@ namespace Hd2Qd.LobbyBrowser
         /// <summary>The Steam ID of the player whose client ran the scan: what a join names when
         /// the lobby publishes no Steam host (a crossplay lobby).</summary>
         internal string Self = "0";
+
+        /// <summary>V28: the lobby this player is already in, read from Steam rich presence by
+        /// the helper before it stops. Empty when the player is not in a lobby.</summary>
+        internal string SelfLobby = "";
 
         /// <summary>Steam's own relay latency (ms) per region, measured by the helper while its
         /// Steam session was up. Empty when Steam had no ping data — those regions use ICMP.</summary>

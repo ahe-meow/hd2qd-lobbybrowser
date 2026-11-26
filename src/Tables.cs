@@ -19,6 +19,14 @@ namespace Hd2Qd.LobbyBrowser
         internal static readonly Dictionary<string, string> MissionZh = new Dictionary<string, string>();
         internal static readonly Dictionary<string, string> MissionEn = new Dictionary<string, string>();
 
+        // HD2LobbyBrowser V27/V28: the mission's map type comes from its hash; a variant is a
+        // planet-level war effect, resolved from the war-state API and named by variant_types.json
+        static readonly Dictionary<int, string[]> EnvLabels = new Dictionary<int, string[]>();
+        static readonly Dictionary<string, int> EnvExact = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        static readonly Dictionary<string, List<int>> EnvOptions = new Dictionary<string, List<int>>(StringComparer.OrdinalIgnoreCase);
+        static readonly Dictionary<string, string[]> VarLabels = new Dictionary<string, string[]>();
+        static readonly Dictionary<string, string> EffectVariant = new Dictionary<string, string>();
+
         static Tables()
         {
             try
@@ -42,6 +50,34 @@ namespace Hd2Qd.LobbyBrowser
                 foreach (var kv in Object("Data.sectors_zh.json")) SectorZh[kv.Key] = kv.Value as string;
                 foreach (var kv in Object("Data.mission_names.json")) MissionZh[kv.Key] = kv.Value as string;
                 foreach (var kv in Object("Data.mission_names_en.json")) MissionEn[kv.Key] = kv.Value as string;
+                var env = Object("Data.env_types.json");
+                if (env.TryGetValue("labels", out var labels) && labels is Dictionary<string, object> el)
+                    foreach (var kv in el)
+                    {
+                        var pair = kv.Value as System.Collections.IList;
+                        if (pair != null && pair.Count >= 2)
+                            EnvLabels[Convert.ToInt32(kv.Key, CultureInfo.InvariantCulture)] = new[] { pair[0] as string, pair[1] as string };
+                    }
+                if (env.TryGetValue("exact", out var exact) && exact is Dictionary<string, object> ex)
+                    foreach (var kv in ex) EnvExact[kv.Key] = Convert.ToInt32(kv.Value, CultureInfo.InvariantCulture);
+                if (env.TryGetValue("options", out var options) && options is Dictionary<string, object> op)
+                    foreach (var kv in op)
+                    {
+                        var list = new List<int>();
+                        if (kv.Value is System.Collections.IList values)
+                            foreach (var v in values) list.Add(Convert.ToInt32(v, CultureInfo.InvariantCulture));
+                        EnvOptions[kv.Key] = list;
+                    }
+                var variant = Object("Data.variant_types.json");
+                if (variant.TryGetValue("types", out var types) && types is Dictionary<string, object> vt)
+                    foreach (var kv in vt)
+                    {
+                        var pair = kv.Value as System.Collections.IList;
+                        if (pair != null && pair.Count >= 2)
+                            VarLabels[kv.Key] = new[] { pair[0] as string, pair[1] as string };
+                    }
+                if (variant.TryGetValue("effects", out var effects) && effects is Dictionary<string, object> ef)
+                    foreach (var kv in ef) EffectVariant[kv.Key] = kv.Value as string;
             }
             catch
             {
@@ -80,6 +116,37 @@ namespace Hd2Qd.LobbyBrowser
             if (string.IsNullOrEmpty(hash)) return "";
             var table = Words.IsChinese(lang) ? MissionZh : MissionEn;
             return table.TryGetValue(hash, out var name) ? name : "";
+        }
+
+        /// <summary>Map types a mission hash can be: one when the table knows it exactly, else
+        /// every possibility. Filtering is "contains any selected", so a room with A/B is kept
+        /// when either is ticked.</summary>
+        internal static List<int> MapTypes(string hash)
+        {
+            var types = new List<int>();
+            if (string.IsNullOrEmpty(hash)) return types;
+            if (EnvExact.TryGetValue(hash, out var one)) { types.Add(one); return types; }
+            if (EnvOptions.TryGetValue(hash, out var many))
+                foreach (var k in many) if (k > 0 && !types.Contains(k)) types.Add(k);
+            return types;
+        }
+
+        internal static string MapTypeName(int key, string lang)
+        {
+            if (!EnvLabels.TryGetValue(key, out var pair)) return key.ToString(CultureInfo.InvariantCulture);
+            return Words.IsChinese(lang) ? pair[0] : pair[1];
+        }
+
+        internal static IEnumerable<string> VariantKeys() => VarLabels.Keys;
+
+        internal static string VariantKey(string effectId) =>
+            effectId != null && EffectVariant.TryGetValue(effectId, out var key) ? key : null;
+
+        internal static string VariantName(string key, string lang)
+        {
+            if (key == null) return "";
+            if (VarLabels.TryGetValue(key, out var pair)) return Words.IsChinese(lang) ? pair[0] : pair[1];
+            return key;
         }
 
         internal static string FrontName(string front, string lang)

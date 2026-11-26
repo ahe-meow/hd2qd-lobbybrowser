@@ -14,16 +14,25 @@ namespace Hd2Qd.LobbyBrowser
         /// <summary>The contract's version. A plugin of another one is refused.</summary>
         public const int Api = 2;
 
-        /// <summary>"window": a window of its own, opened from the card (Open).</summary>
+        /// <summary>"window": opened from the card (Open). It becomes a tab of the manager's
+        /// window when Quick Deploy 0.25.0 passes host["tab"], a window otherwise.</summary>
         public const string Kind = "window";
 
         public static string Title(string lang) => Words.Get(lang, "title");
 
         public static string Summary(string lang) => Words.Get(lang, "summary");
 
-        /// <summary>Kind "window": the card's Open. host["window"](title, content) makes a window
-        /// with the manager's own frame.</summary>
-        public static void Open(Window owner, Dictionary<string, object> host) => BrowserWindow.Show(owner, host);
+        // this plugin's tab, while it is open: Open shows it again instead of making another
+        static Action showTab;
+
+        /// <summary>Kind "window": the card's Open. host["tab"](title, content, closed) shows the
+        /// content as a tab of the manager's window (Quick Deploy 0.25.0 and later); a manager
+        /// without it gets a window with its own frame from host["window"](title, content).</summary>
+        public static void Open(Window owner, Dictionary<string, object> host)
+        {
+            if (showTab != null) { showTab(); return; }
+            showTab = BrowserWindow.Show(owner, host, () => showTab = null);
+        }
 
         /// <summary>Optional: commands added to the manager's command line, as rows of [name,
         /// help]. A name the manager has itself is left out.</summary>

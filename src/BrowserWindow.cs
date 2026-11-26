@@ -13,19 +13,30 @@ using System.Windows.Threading;
 
 namespace Hd2Qd.LobbyBrowser
 {
-    /// <summary>The plugin's window: the manager's own frame (host["window"]) drawn around a body
-    /// of the manager's own parts — ghost buttons, chips, ticks, a dark card, banded rows. The
-    /// filters above, the table between them, the count and Join in a bar at the bottom right.</summary>
+    /// <summary>The plugin's body — ghost buttons, chips, ticks, a dark card, banded rows, the
+    /// count and Join in a bar at the bottom right — shown as a tab of the manager's window when
+    /// Quick Deploy 0.25.0 passes host["tab"], or inside host["window"]'s frame on older managers
+    /// and in the standalone build.</summary>
     internal static class BrowserWindow
     {
-        internal static void Show(Window owner, Dictionary<string, object> host)
+        /// <summary>Returns the tab's "show" action, or null when opened as a window.</summary>
+        internal static Action Show(Window owner, Dictionary<string, object> host, Action closed)
         {
-            var shell = new LobbyShell(host);
+            var shell = new LobbyShell(host, closed);
+            if (host.TryGetValue("tab", out var t) && t is Func<string, FrameworkElement, Action, Dictionary<string, object>> tab)
+            {
+                // The tab has no window of its own. Shell stops its timers when the manager
+                // closes the tab, and tells Plugin so a later Open shows this tab again.
+                var handle = tab(Words.Get(shell.Lang, "title"), shell.Root, shell.Close);
+                shell.Refresh();
+                return handle.TryGetValue("show", out var show) ? show as Action : null;
+            }
             var make = (Func<string, FrameworkElement, Window>)host["window"];
             var window = make(Words.Get(shell.Lang, "title"), shell.Root);
             shell.Host = window;
             window.Show();
             shell.Refresh();
+            return null;
         }
     }
 
@@ -39,16 +50,22 @@ namespace Hd2Qd.LobbyBrowser
         readonly Dictionary<string, object> _host;
         readonly string _home;
         readonly string _handed;
+        readonly Action _closed;
         LobbyPage _page;
 
-        internal LobbyShell(Dictionary<string, object> host)
+        internal LobbyShell(Dictionary<string, object> host, Action closed = null)
         {
             _host = host;
+            _closed = closed;
             _home = host != null && host.TryGetValue("home", out var home) ? home as string : null;
             _handed = Words.Lang(host);
             Lang = Language.Chosen(_home) ?? Language.Manager(_home, _handed);
             Show(null);
         }
+
+        /// <summary>The manager calls this once when it closes our tab: stop the timers and let
+        /// Plugin forget the tab handle. A window's own Closed does the same through Host.</summary>
+        internal void Close() { _page?.Stop(); _closed?.Invoke(); }
 
         /// <summary>The language this body is drawn in.</summary>
         internal string Lang { get; private set; }
@@ -137,11 +154,20 @@ namespace Hd2Qd.LobbyBrowser
         readonly Button _planetButton;
         readonly Button _difficulty;
         readonly Button _missionButton;
+        readonly Button _mapButton;
+        readonly Button _variantButton;
         readonly Button _presetButton;
         readonly Button _join;
+        Popup _openPopup;
+        ContextMenu _openMenu;
         readonly Func<string, string, string, string> _askText;
         readonly HashSet<int> _planets = new HashSet<int>();
         readonly HashSet<string> _missions = new HashSet<string>();     // by mission hash
+        readonly HashSet<int> _mapSel = new HashSet<int>();             // V26/V27: contains-any
+        readonly HashSet<string> _varSel = new HashSet<string>();       // V27: contains-any
+        readonly HashSet<int> _difficulties = new HashSet<int>();       // V28: 0 = any
+        string _selfLobby = "";                                          // V28: my current lobby
+        Room _selfRoom;                                                  // kept across refreshes
         List<Room> _rooms = new List<Room>();
         Dictionary<string, int> _steamPings = new Dictionary<string, int>();
         int _difficultyValue;
@@ -149,6 +175,7 @@ namespace Hd2Qd.LobbyBrowser
         Sort _sort = Sort.Members;
         bool _sortDesc = true;
         bool _busy;
+        string _note;
         int _pingRound;
 
         LobbyShell _shell;
@@ -189,6 +216,12 @@ namespace Hd2Qd.LobbyBrowser
             _difficulty.Click += (s, e) => PickDifficulty();
             _missionButton = Farm(Words.Get(lang, "filter_mission_all"), "Ghost");
             _missionButton.Click += (s, e) => PickMissions();
+            _mapButton = Farm(Words.Get(lang, "filter_map_all"), "Ghost");
+            _mapButton.ToolTip = Words.Get(lang, "map_tip");
+            _mapButton.Click += (s, e) => PickMaps();
+            _variantButton = Farm(Words.Get(lang, "filter_variant_all"), "Ghost");
+            _variantButton.ToolTip = Words.Get(lang, "variant_tip");
+            _variantButton.Click += (s, e) => PickVariants();
             _presetButton = Farm(Words.Get(lang, "preset"), "Ghost");
             _presetButton.Click += (s, e) => PickPresets();
 
@@ -206,6 +239,8 @@ namespace Hd2Qd.LobbyBrowser
             bar.Children.Add(_planetButton);
             bar.Children.Add(_difficulty);
             bar.Children.Add(_missionButton);
+            bar.Children.Add(_mapButton);
+            bar.Children.Add(_variantButton);
             bar.Children.Add(_presetButton);
             bar.Children.Add(Rule());
             foreach (var front in new[] { "Terminids", "Automatons", "Illuminate" })
@@ -237,7 +272,7 @@ namespace Hd2Qd.LobbyBrowser
             var rule = new Border { Height = 1, Background = Theme.B("Grid"), Margin = new Thickness(16, 0, 16, 0) };
             Grid.SetRow(rule, 1);
             Dress();
-            _list.SelectionChanged += (s, e) => _join.IsEnabled = _list.SelectedItem is Room;
+            _list.SelectionChanged += (s, e) => SyncJoin(_list.SelectedItem as Room);
             _list.MouseDoubleClick += (s, e) => { if (_list.SelectedItem is Room) Join(); };
             _list.KeyDown += (s, e) => { if (e.Key == Key.Enter) Join(); };
             var body = new Grid();
@@ -299,11 +334,8 @@ namespace Hd2Qd.LobbyBrowser
             _empty.Text = Words.Get(lang, "empty");
             _empty.Visibility = Visibility.Collapsed;
             ShowRows();
-            SetStatus(state != null && state.Rooms.Count > 0
-                ? state.PlanetsScanned == 0
-                    ? Words.F(lang, "found_world", state.Rooms.Count)
-                    : Words.F(lang, "found", state.Rooms.Count, state.PlanetsScanned)
-                : Words.Get(lang, "ready"));
+            if (state != null && state.Rooms.Count > 0) SetFoundText(state.Rooms.Count);
+            else SetStatus(Words.Get(lang, "ready"));
         }
 
         internal FrameworkElement Root { get; }
@@ -315,6 +347,11 @@ namespace Hd2Qd.LobbyBrowser
             internal List<Room> Rooms = new List<Room>();
             internal HashSet<int> Planets = new HashSet<int>();
             internal HashSet<string> Missions = new HashSet<string>();
+            internal HashSet<int> Maps = new HashSet<int>();
+            internal HashSet<string> Vars = new HashSet<string>();
+            internal HashSet<int> Difficulties = new HashSet<int>();
+            internal string SelfLobby = "";
+            internal Room SelfRoom;
             internal List<string> Fronts = new List<string>();
             internal int Difficulty;
             internal bool PublicOn = true;
@@ -332,6 +369,11 @@ namespace Hd2Qd.LobbyBrowser
             Rooms = _rooms,
             Planets = new HashSet<int>(_planets),
             Missions = new HashSet<string>(_missions),
+            Maps = new HashSet<int>(_mapSel),
+            Vars = new HashSet<string>(_varSel),
+            Difficulties = new HashSet<int>(_difficulties),
+            SelfLobby = _selfLobby,
+            SelfRoom = _selfRoom,
             Fronts = _fronts.Where(box => box.IsChecked == true).Select(box => (string)box.Tag).ToList(),
             Difficulty = _difficultyValue,
             PublicOn = _publicOnly.IsChecked == true,
@@ -353,6 +395,14 @@ namespace Hd2Qd.LobbyBrowser
             foreach (var planet in state.Planets) _planets.Add(planet);
             _missions.Clear();
             foreach (var hash in state.Missions) _missions.Add(hash);
+            _mapSel.Clear();
+            foreach (var map in state.Maps) _mapSel.Add(map);
+            _varSel.Clear();
+            foreach (var variant in state.Vars) _varSel.Add(variant);
+            _difficulties.Clear();
+            foreach (var diff in state.Difficulties) _difficulties.Add(diff);
+            _selfLobby = state.SelfLobby ?? "";
+            _selfRoom = state.SelfRoom;
             _difficultyValue = state.Difficulty;
             if (_difficultyValue > 0) _difficulty.Content = Words.F(_lang, "diff_n", _difficultyValue);
             _publicOnly.IsChecked = state.PublicOn;
@@ -370,8 +420,10 @@ namespace Hd2Qd.LobbyBrowser
         /// window's (kept beside the presets), and following HD2QD is what it starts with.</summary>
         void PickLanguage(Button anchor)
         {
+            CloseFloats();
             var chosen = Language.Chosen(_home);
             var menu = new ContextMenu { PlacementTarget = anchor, Placement = PlacementMode.Bottom };
+            WatchMenu(menu);
             var zh = new MenuItem { Header = "中文", IsCheckable = true, IsChecked = _lang == Language.Zh };
             zh.Click += (s, e) => _shell.Switch(Language.Zh);
             var en = new MenuItem { Header = "English", IsCheckable = true, IsChecked = _lang == Language.En };
@@ -471,11 +523,13 @@ namespace Hd2Qd.LobbyBrowser
             "<Setter Property='HorizontalContentAlignment' Value='Stretch'/>" +
             "<Setter Property='FocusVisualStyle' Value='{x:Null}'/>" +
             "<Setter Property='Template'><Setter.Value><ControlTemplate TargetType='ListBoxItem'>" +
-            "<Border x:Name='b' Background='Transparent' Padding='16,0' Cursor='Hand'>" +
+            "<Border x:Name='b' Background='Transparent' BorderBrush='Transparent' BorderThickness='3,0,0,0' Padding='13,0' Cursor='Hand'>" +
             "<ContentPresenter HorizontalAlignment='Stretch' VerticalAlignment='Center'/></Border>" +
             "<ControlTemplate.Triggers>" +
             "<Trigger Property='ItemsControl.AlternationIndex' Value='1'><Setter TargetName='b' Property='Background' Value='$Band$'/></Trigger>" +
             "<Trigger Property='IsMouseOver' Value='True'><Setter TargetName='b' Property='Background' Value='$Grid$'/></Trigger>" +
+            "<DataTrigger Binding='{Binding IsMine}' Value='True'><Setter TargetName='b' Property='Background' Value='#33C8A13A'/>" +
+            "<Setter TargetName='b' Property='BorderBrush' Value='$Yellow$'/></DataTrigger>" +
             "<Trigger Property='IsSelected' Value='True'><Setter TargetName='b' Property='Background' Value='$Yellow$'/>" +
             "<Setter Property='Foreground' Value='$TapeInk$'/></Trigger>" +
             "</ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>";
@@ -535,29 +589,124 @@ namespace Hd2Qd.LobbyBrowser
             }
         }
 
+        /// <summary>V28: the difficulties are ticks, not one menu choice. An empty set is "any";
+        /// the old single value stays for old presets and for the Steam query split.</summary>
         void PickDifficulty()
         {
-            var menu = new ContextMenu { PlacementTarget = _difficulty, Placement = PlacementMode.Bottom };
-            menu.Items.Add(Choice(Words.Get(_lang, "diff_any"), 0));
-            for (var i = 1; i <= 10; i++) menu.Items.Add(Choice(Words.F(_lang, "diff_n", i), i));
-            menu.IsOpen = true;
+            CloseFloats();
+            var items = Enumerable.Range(0, 11).Select(i => new Picker.Item
+            {
+                Key = i.ToString(CultureInfo.InvariantCulture),
+                Text = i == 0 ? Words.Get(_lang, "diff_any") : Words.F(_lang, "diff_n", i),
+                Note = Words.F(_lang, "map_count", _rooms.Count(r => i == 0 || r.Difficulty == i)),
+                On = i == 0 ? _difficulties.Count == 0 : _difficulties.Contains(i),
+            }).ToList();
+            _openPopup = Picker.Show(_difficulty, Words.Get(_lang, "difficulty_pick"), Words.Get(_lang, "filter_search"),
+                Words.Get(_lang, "filter_clear"), Words.Get(_lang, "filter_all"), Words.Get(_lang, "filter_invert"),
+                Words.Get(_lang, "filter_empty"), items, () =>
+                {
+                    _difficulties.Clear();
+                    foreach (var item in items.Where(i => i.On))
+                    {
+                        int value;
+                        if (int.TryParse(item.Key, NumberStyles.Integer, CultureInfo.InvariantCulture, out value) && value > 0)
+                            _difficulties.Add(value);
+                    }
+                    UpdateFilterLabels();
+                    ShowRows();
+                });
+            WatchPopup(_openPopup);
         }
 
-        MenuItem Choice(string text, int value)
+        /// <summary>V26/V27: map types come from the mission hash in the current results; a room
+        /// with several scenes matches any selected one.</summary>
+        void PickMaps()
         {
-            var item = new MenuItem { Header = text, IsCheckable = true, IsChecked = value == _difficultyValue };
-            item.Click += (s, e) =>
+            CloseFloats();
+            var counts = new Dictionary<int, int>();
+            foreach (var room in _rooms) foreach (var type in room.MapTypes)
+                if (!counts.ContainsKey(type)) counts[type] = 1; else counts[type]++;
+            if (counts.Count == 0)
             {
-                _difficultyValue = value;
-                _difficulty.Content = text;
-            };
-            return item;
+                SetStatus(Words.Get(_lang, "map_empty"));
+                return;
+            }
+            var items = counts.Keys.OrderBy(k => k).Select(k => new Picker.Item
+            {
+                Key = k.ToString(CultureInfo.InvariantCulture),
+                Text = Tables.MapTypeName(k, _lang),
+                Note = Words.F(_lang, "map_count", counts[k]),
+                On = _mapSel.Contains(k),
+            }).ToList();
+            _openPopup = Picker.Show(_mapButton, Words.Get(_lang, "map_pick"), Words.Get(_lang, "filter_search"),
+                Words.Get(_lang, "filter_clear"), Words.Get(_lang, "filter_all"), Words.Get(_lang, "filter_invert"),
+                Words.Get(_lang, "filter_empty"), items, () =>
+                {
+                    _mapSel.Clear();
+                    foreach (var item in items.Where(i => i.On))
+                    {
+                        int value;
+                        if (int.TryParse(item.Key, NumberStyles.Integer, CultureInfo.InvariantCulture, out value)) _mapSel.Add(value);
+                    }
+                    UpdateFilterLabels();
+                    ShowRows();
+                });
+            WatchPopup(_openPopup);
+        }
+
+        /// <summary>V27/V28: variants are planet-level; the list is every known type, with the
+        /// count in the current results so an absent one reads as 0.</summary>
+        void PickVariants()
+        {
+            CloseFloats();
+            var counts = new Dictionary<string, int>();
+            foreach (var room in _rooms) foreach (var variant in room.Variants)
+                if (!counts.ContainsKey(variant)) counts[variant] = 1; else counts[variant]++;
+            var items = Tables.VariantKeys().OrderByDescending(k => counts.ContainsKey(k) ? counts[k] : 0)
+                .ThenBy(k => Tables.VariantName(k, _lang)).Select(k => new Picker.Item
+                {
+                    Key = k,
+                    Text = Tables.VariantName(k, _lang),
+                    Note = Words.F(_lang, "variant_count", counts.ContainsKey(k) ? counts[k] : 0),
+                    On = _varSel.Contains(k),
+                }).ToList();
+            _openPopup = Picker.Show(_variantButton, Words.Get(_lang, "variant_pick"), Words.Get(_lang, "filter_search"),
+                Words.Get(_lang, "filter_clear"), Words.Get(_lang, "filter_all"), Words.Get(_lang, "filter_invert"),
+                Words.Get(_lang, "variant_empty"), items, () =>
+                {
+                    _varSel.Clear();
+                    foreach (var item in items.Where(i => i.On)) _varSel.Add(item.Key);
+                    UpdateFilterLabels();
+                    ShowRows();
+                });
+            WatchPopup(_openPopup);
+        }
+
+        /// <summary>V28: only one filter panel at a time. The manager's own menus obey the same
+        /// rule, so a Popup or a ContextMenu never stacks over another.</summary>
+        void CloseFloats()
+        {
+            if (_openPopup != null) { _openPopup.IsOpen = false; _openPopup = null; }
+            if (_openMenu != null) { _openMenu.IsOpen = false; _openMenu = null; }
+        }
+
+        void WatchPopup(Popup popup)
+        {
+            if (popup == null) return;
+            popup.Closed += (s, e) => { if (ReferenceEquals(_openPopup, popup)) _openPopup = null; };
+        }
+
+        void WatchMenu(ContextMenu menu)
+        {
+            _openMenu = menu;
+            menu.Closed += (s, e) => { if (ReferenceEquals(_openMenu, menu)) _openMenu = null; };
         }
 
         /// <summary>The planets the scan should ask for, by name in the manager's language; a
         /// front's chip over the list takes or leaves all of its planets at once.</summary>
         void PickPlanets()
         {
+            CloseFloats();
             var rows = Tables.Planets(_lang);
             if (rows.Count == 0)
             {
@@ -568,11 +717,13 @@ namespace Hd2Qd.LobbyBrowser
             {
                 Key = p.Index.ToString(CultureInfo.InvariantCulture),
                 Text = p.Name,
-                Note = p.Sector,
-                Group = Tables.FrontName(p.Front, _lang),
+                // V28: group by sector so ticking a group takes a whole sector; the front is
+                // already a chip on the filter row, so it moves to the note.
+                Note = Tables.FrontName(p.Front, _lang),
+                Group = Tables.Sector(p.Index, _lang),
                 On = _planets.Contains(p.Index),
             }).ToList();
-            Picker.Show(_planetButton, Words.Get(_lang, "planet_pick"), Words.Get(_lang, "filter_search"),
+            _openPopup = Picker.Show(_planetButton, Words.Get(_lang, "planet_pick"), Words.Get(_lang, "filter_search"),
                 Words.Get(_lang, "filter_clear"), Words.Get(_lang, "filter_all"), Words.Get(_lang, "filter_invert"),
                 Words.Get(_lang, "filter_empty"), items, () =>
                 {
@@ -584,12 +735,14 @@ namespace Hd2Qd.LobbyBrowser
                     }
                     UpdateFilterLabels();
                 });
+            WatchPopup(_openPopup);
         }
 
         /// <summary>The missions the current results hold, filtered here: the scan is not asked
         /// again for them, so picking one costs nothing and the list keeps its age.</summary>
         void PickMissions()
         {
+            CloseFloats();
             if (_rooms.Count == 0)
             {
                 SetStatus(Words.Get(_lang, "mission_none"));
@@ -603,7 +756,7 @@ namespace Hd2Qd.LobbyBrowser
                 Note = Words.F(_lang, "mission_count", g.Count()),
                 On = _missions.Contains(g.Key),
             }).ToList();
-            Picker.Show(_missionButton, Words.Get(_lang, "mission_pick"), Words.Get(_lang, "filter_search"),
+            _openPopup = Picker.Show(_missionButton, Words.Get(_lang, "mission_pick"), Words.Get(_lang, "filter_search"),
                 Words.Get(_lang, "filter_clear"), Words.Get(_lang, "filter_all"), Words.Get(_lang, "filter_invert"),
                 Words.Get(_lang, "filter_empty"), items, () =>
                 {
@@ -612,6 +765,7 @@ namespace Hd2Qd.LobbyBrowser
                     UpdateFilterLabels();
                     ShowRows();
                 });
+            WatchPopup(_openPopup);
         }
 
         /// <summary>The presets: the filters in hand saved under a name, and put back with one
@@ -619,6 +773,7 @@ namespace Hd2Qd.LobbyBrowser
         /// costs one line a preset, not two (the user, 2026-11-25).</summary>
         void PickPresets()
         {
+            CloseFloats();
             var popup = new Popup
             {
                 PlacementTarget = _presetButton, Placement = PlacementMode.Bottom, VerticalOffset = 6,
@@ -647,6 +802,8 @@ namespace Hd2Qd.LobbyBrowser
             }
             Paint();
             popup.IsOpen = true;
+            _openPopup = popup;
+            WatchPopup(popup);
         }
 
         /// <summary>The filters in hand, named: a name already in the list is replaced by what is
@@ -693,6 +850,9 @@ namespace Hd2Qd.LobbyBrowser
             Planets = _planets.ToList(),
             Fronts = _fronts.Where(box => box.IsChecked == true).Select(box => (string)box.Tag).ToList(),
             Difficulty = _difficultyValue,
+            Difficulties = _difficulties.ToList(),
+            Maps = _mapSel.ToList(),
+            Vars = _varSel.ToList(),
             PublicOnly = _publicOnly.IsChecked == true,
             HideNoSession = _hideNoSession.IsChecked == true,
             HideFull = _hideFull.IsChecked == true,
@@ -709,6 +869,12 @@ namespace Hd2Qd.LobbyBrowser
             foreach (var box in _fronts) box.IsChecked = preset.Fronts.Contains((string)box.Tag);
             _difficultyValue = preset.Difficulty;
             _difficulty.Content = preset.Difficulty <= 0 ? Words.Get(_lang, "diff_any") : Words.F(_lang, "diff_n", preset.Difficulty);
+            _difficulties.Clear();
+            foreach (var diff in preset.Difficulties) _difficulties.Add(diff);
+            _mapSel.Clear();
+            foreach (var map in preset.Maps) _mapSel.Add(map);
+            _varSel.Clear();
+            foreach (var variant in preset.Vars) _varSel.Add(variant);
             _publicOnly.IsChecked = preset.PublicOnly;
             _hideNoSession.IsChecked = preset.HideNoSession;
             _hideFull.IsChecked = preset.HideFull;
@@ -739,6 +905,15 @@ namespace Hd2Qd.LobbyBrowser
             _missionButton.Content = _missions.Count == 0
                 ? Words.Get(_lang, "filter_mission_all")
                 : Words.F(_lang, "filter_mission_n", _missions.Count);
+            _mapButton.Content = _mapSel.Count == 0
+                ? Words.Get(_lang, "filter_map_all")
+                : Words.F(_lang, "filter_map_n", _mapSel.Count);
+            _variantButton.Content = _varSel.Count == 0
+                ? Words.Get(_lang, "filter_variant_all")
+                : Words.F(_lang, "filter_variant_n", _varSel.Count);
+            _difficulty.Content = _difficulties.Count == 0
+                ? Words.Get(_lang, "diff_any")
+                : Words.F(_lang, "filter_difficulty_n", _difficulties.Count);
         }
 
         void SortBy(Sort key)
@@ -775,16 +950,49 @@ namespace Hd2Qd.LobbyBrowser
         }
 
         bool MatchesMission(Room room) => _missions.Count == 0 || _missions.Contains(room.MissionHash ?? "");
+        bool MatchesMap(Room room) => _mapSel.Count == 0 || room.MapTypes.Any(t => _mapSel.Contains(t));
+        bool MatchesVariant(Room room) => _varSel.Count == 0 || room.Variants.Any(v => _varSel.Contains(v));
+        bool MatchesDifficulty(Room room) => _difficulties.Count == 0 || _difficulties.Contains(room.Difficulty);
 
-        /// <summary>The rows as the filters leave them, sorted: what the list shows.</summary>
+        /// <summary>The rows as the filters leave them, sorted, with this player's room pinned:
+        /// what the list shows and what the count in the status bar speaks of.</summary>
         void ShowRows()
         {
-            var rooms = _rooms.Where(MatchesMission).ToList();
+            var rooms = _rooms.Where(r => MatchesMission(r) && MatchesMap(r) && MatchesVariant(r) && MatchesDifficulty(r)).ToList();
             rooms.Sort(Compare);
+            // V28: the room you joined stays at the top even after a refresh, and even when a
+            // filter would otherwise hide it — the cached room is used when it is not in the list.
+            var mine = rooms.FirstOrDefault(r => r.Lobby.ToString(CultureInfo.InvariantCulture) == _selfLobby) ?? _selfRoom;
+            if (mine != null)
+            {
+                rooms.Remove(mine);
+                rooms.Insert(0, mine);
+            }
+            foreach (var room in _rooms) room.IsMine = room.Lobby == mine?.Lobby;
             _list.ItemsSource = rooms;
             _empty.Text = Words.Get(_lang, "empty");
             _empty.Visibility = rooms.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-            _join.IsEnabled = false;
+            SyncJoin(null);
+            SetFoundText(rooms.Count);
+        }
+
+        /// <summary>V28: the room you are already in has no Join button — it says so instead.</summary>
+        void SyncJoin(Room room)
+        {
+            var mine = room != null && room.Lobby.ToString(CultureInfo.InvariantCulture) == _selfLobby;
+            _join.Content = Words.Get(_lang, mine ? "you_here" : "join");
+            _join.IsEnabled = room != null && !mine;
+            _join.ToolTip = Words.Get(_lang, mine ? "state_joined" : "hint_wait");
+        }
+
+        /// <summary>V26: the number beside the table is the number of rows on screen, not the
+        /// number Steam returned before the local filters ran.</summary>
+        void SetFoundText(int count)
+        {
+            var text = _scannedPlanets == 0
+                ? Words.F(_lang, "found_world", count)
+                : Words.F(_lang, "found", count, _scannedPlanets);
+            SetStatus(_note == null ? text : text + " · " + _note);
         }
 
         /// <summary>Stop both timers when the window closes or the body is rebuilt.</summary>
@@ -873,6 +1081,9 @@ namespace Hd2Qd.LobbyBrowser
             var filters = new Filters
             {
                 Difficulty = _difficultyValue,
+                Difficulties = _difficulties.ToList(),
+                MapTypes = _mapSel.ToList(),
+                Variants = _varSel.ToList(),
                 PublicOnly = _publicOnly.IsChecked == true,
                 HideNoSession = _hideNoSession.IsChecked == true,
                 HideFull = _hideFull.IsChecked == true,
@@ -896,7 +1107,9 @@ namespace Hd2Qd.LobbyBrowser
             var filters = Read();
             var manual = _planets.Count > 0;
             var fronts = filters.Fronts.ToList();
-            var difficulty = _difficultyValue;
+            // V28: with several difficulties ticked, Live only needs to know "a filter is on"
+            // to pick the deeper set of planets; the exact values are applied to the rows here.
+            var difficulty = _difficulties.Count > 0 ? 1 : _difficultyValue;
             var dispatcher = _shell.Host != null ? _shell.Host.Dispatcher : Dispatcher.CurrentDispatcher;
             Task.Run(() =>
             {
@@ -941,15 +1154,28 @@ namespace Hd2Qd.LobbyBrowser
             _self = result.Self;
             _steamPings = result.SteamPings;
             _scannedPlanets = result.Planets;
+            _note = note;
+            // V26/V27: map types come from the mission hash; variants are planet-level war
+            // effects. Both are computed here, in the manager, so the helper's Steam session
+            // stays short and the HTTP stays out of it (Live.cs's design constraint).
+            var effects = War.Effects(_home);
+            foreach (var room in _rooms)
+            {
+                if (room.MapTypes.Count == 0) room.MapTypes = Tables.MapTypes(room.MissionHash);
+                if (room.Variants.Count == 0 && effects.TryGetValue(room.Planet, out var variants))
+                    room.Variants = new List<string>(variants);
+                room.Dress(lang);
+            }
+            // V28: an empty reading is not a reason to forget the room we are in.
+            if (!string.IsNullOrEmpty(result.SelfLobby))
+            {
+                _selfLobby = result.SelfLobby;
+                var mine = _rooms.FirstOrDefault(r => r.Lobby.ToString(CultureInfo.InvariantCulture) == _selfLobby);
+                if (mine != null) _selfRoom = mine;
+            }
             _missions.RemoveWhere(hash => _rooms.All(r => (r.MissionHash ?? "") != hash));
             UpdateFilterLabels();
             ShowRows();
-            var said = result.Rooms.Count == 0
-                ? Words.Get(lang, "empty")
-                : result.Planets == 0
-                    ? Words.F(lang, "found_world", result.Rooms.Count)
-                    : Words.F(lang, "found", result.Rooms.Count, result.Planets);
-            SetStatus(note == null ? said : said + " · " + note);
             MeasurePings(lang);
         }
 
