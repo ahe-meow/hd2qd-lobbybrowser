@@ -53,11 +53,13 @@ difficulty, the switches, the missions, the regions, the sort) and put it back w
 **Load** and **Delete** beside it, so a long list costs one line a preset — a card of the manager's,
 not a menu item per action.
 
-**Refresh** shows its progress in a thin bar pinned to the window's bottom edge: a growing fill
-for the planet scan and a moving sweep for the other stages. The stage and what is actually
-happening ("Now: Mars · Steam is returning the lobby list") stay on two lines above it. No
-percentage is displayed — only the planet scan has a real counter, and the other stages show a
-moving bar instead of inventing one.
+**Refresh** shows its progress in a thin bar pinned to the window's bottom edge. It sits outside
+the content flow, so the Join row keeps its 18px bottom frame whether or not a scan is running.
+The stage and what is actually happening ("Now: Mars · Steam is returning the lobby list") are one
+stack beside Join, not rows that push the button around. A real counter eases the fill toward its
+new width; stages without a counter send a short packet in from the left and out to the right,
+fading at both edges instead of bouncing off a margin. No percentage is displayed — only the
+planet scan has a real counter, and the other stages show a moving packet instead of inventing one.
 
 **Join** — bottom right, or a double-click, or Enter — opens
 `steam://joinlobby/553850/<lobby>/<host>` and nothing else. When the game is closed, Steam itself
@@ -246,9 +248,10 @@ the plugin contract of
 `presets.json`。每个名字独占一行，**载入**与**删除**就在同一行右侧——预设再多也只占“每套一行”，
 不随动作数量翻倍。
 
-**刷新**时在窗口底边显示一条细进度条：星球扫描阶段为推进填充，其余阶段为流动扫动。
-上方两行分别是当前阶段和正在做的事（例如"当前：玛尔特 · Steam 正在返回房间列表"）。
-界面不再显示百分比；只有星球扫描有真实计数，其余阶段用流动条表示，不编造百分比。
+**刷新**时在窗口底边显示一条细进度条：它独立于内容排版，所以无论是否正在扫描，「加入」所在的一行都保留 18px 的下边距。
+当前阶段和正在做的事（例如"当前：玛尔特 · Steam 正在返回房间列表"）合成「加入」左侧的一组信息，不再把按钮挤到贴底。
+有真实计数时（星球扫描）填充会平滑过渡到新宽度；没有计数时，一小段黄条从左边淡入、穿过进度条、到右边淡出，
+不会撞到边距再反弹。界面不再显示百分比；只有星球扫描有真实计数，其余阶段用流动光带表示，不编造百分比。
 
 **加入**在右下角（也可双击行、回车）：只做一件事——打开 `steam://joinlobby/553850/<大厅>/<房主>`。
 游戏没运行时，Steam 自己会用 `+connect_lobby <大厅>` 启动游戏，游戏启动过程中直接进房；这正是 Valve 文档里

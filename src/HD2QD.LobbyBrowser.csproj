@@ -17,7 +17,7 @@
     <Nullable>disable</Nullable>
     <AssemblyName>HD2QD.LobbyBrowser</AssemblyName>
     <RootNamespace>Hd2Qd.LobbyBrowser</RootNamespace>
-    <Version>1.9.7</Version>
+    <Version>1.9.8</Version>
     <Product>HD2QD Lobby Browser</Product>
     <Company>ahe-meow</Company>
     <Copyright>MIT License</Copyright>

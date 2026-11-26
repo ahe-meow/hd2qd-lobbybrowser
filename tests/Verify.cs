@@ -525,6 +525,24 @@ namespace Hd2Qd.Verify
                     pageText.Contains("void PickRegions()") && pageText.Contains("MatchesRegion(r)") &&
                     pageText.Contains("_regions.Contains(room.Region.Trim().ToUpperInvariant())") &&
                     pageText.Contains("var items = new[] { \"AS\", \"NA\", \"EU\", \"OC\", \"SA\", \"ME\", \"AF\" }"));
+                // The Join row must keep its bottom frame when no progress is showing: the
+                // status/detail pair is one stack, and the hairline lives outside that flow.
+                Check("bottom frame survives an idle scan",
+                    pageText.Contains("new Thickness(20, 18, 20, 18)") &&
+                    pageText.Contains("var info = new StackPanel") &&
+                    pageText.Contains("info.Children.Add(_progressDetail)") &&
+                    pageText.Contains("Grid.SetRow(_progressTrack, 3)") &&
+                    !pageText.Contains("bottom.RowDefinitions.Add"));
+                // Indeterminate motion is a packet that fades in at the left and out at the
+                // right, never a bar that bounces off the margins; determinate motion eases.
+                Check("progress sweeps across instead of bouncing",
+                    pageText.Contains("new DoubleAnimation(-dash, _progressWidth, duration)") &&
+                    pageText.Contains("LinearDoubleKeyFrame(0, KeyTime.FromPercent(0))") &&
+                    pageText.Contains("LinearDoubleKeyFrame(0, KeyTime.FromPercent(1))") &&
+                    !pageText.Contains("_progressTimer"));
+                Check("determinate progress eases to its target",
+                    pageText.Contains("new DoubleAnimation(_progressScale.ScaleX, target, TimeSpan.FromMilliseconds(280))") &&
+                    pageText.Contains("EasingMode.EaseOut") && pageText.Contains("FillBehavior.HoldEnd"));
                 Check("open waits for a manual refresh", !pageText.Contains("shell.Refresh();") &&
                     pageText.Contains("SteamRunning()") && pageText.Contains("steam_not_running"));
                 // 0.25's acrylic paints Ground900 translucent behind a tab. A second, opaque

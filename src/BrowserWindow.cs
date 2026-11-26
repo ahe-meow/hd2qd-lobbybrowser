@@ -9,6 +9,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Threading;
 
 namespace Hd2Qd.LobbyBrowser
@@ -124,22 +125,26 @@ namespace Hd2Qd.LobbyBrowser
         readonly TextBlock _progressDetail = new TextBlock
         {
             FontSize = 12, Foreground = Theme.B("Muted"), TextTrimming = TextTrimming.CharacterEllipsis,
-            Visibility = Visibility.Collapsed,
+            Margin = new Thickness(0, 5, 0, 0), Visibility = Visibility.Collapsed,
         };
         readonly Border _progressTrack;
-        readonly Border _progressFill = new Border { Background = Theme.B("Yellow") };
-        readonly ColumnDefinition _progressBefore = new ColumnDefinition();
-        readonly ColumnDefinition _progressBar = new ColumnDefinition();
-        readonly ColumnDefinition _progressAfter = new ColumnDefinition();
-        readonly DispatcherTimer _progressTimer = new DispatcherTimer(DispatcherPriority.Render)
+        readonly Border _progressFill = new Border
         {
-            Interval = TimeSpan.FromMilliseconds(16),
+            Background = Theme.B("Yellow"),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Stretch,
+            RenderTransformOrigin = new Point(0, 0.5),
+            IsHitTestVisible = false,
         };
+        readonly ScaleTransform _progressScale = new ScaleTransform(0, 1);
+        readonly TranslateTransform _progressShift = new TranslateTransform();
         readonly DispatcherTimer _ageTimer = new DispatcherTimer(DispatcherPriority.Background)
         {
             Interval = TimeSpan.FromSeconds(5),
         };
-        double _progressPhase;
+        double _progressWidth;
+        double _percent = -1;
+        bool _flowing;
         readonly TextBlock _empty = new TextBlock
         {
             FontSize = 13, Foreground = Theme.B("Muted"), HorizontalAlignment = HorizontalAlignment.Center,
@@ -189,21 +194,30 @@ namespace Hd2Qd.LobbyBrowser
         {
             _lang = lang;
             _shell = shell;
-            var meter = new Grid();
-            meter.ColumnDefinitions.Add(_progressBefore);
-            meter.ColumnDefinitions.Add(_progressBar);
-            meter.ColumnDefinitions.Add(_progressAfter);
-            Grid.SetColumn(_progressFill, 1);
-            meter.Children.Add(_progressFill);
-            // a full-width hairline stuck to the window's bottom edge — the negative side margins
-            // cross the root's gutters, so the fill starts at the frame, not inside it
+            // One full-width hairline, drawn outside the content flow. The negative side margins
+            // cross the root's gutters; the negative bottom margin crosses its 18px bottom frame,
+            // so the track reaches the real edge without ever stealing space from the Join row.
+            var progressTransform = new TransformGroup();
+            progressTransform.Children.Add(_progressScale);
+            progressTransform.Children.Add(_progressShift);
+            _progressFill.RenderTransform = progressTransform;
             _progressTrack = new Border
             {
-                Height = 6, Margin = new Thickness(-20, 10, -20, 0),
-                Background = Theme.B("Grid"), ClipToBounds = true, Child = meter,
+                Height = 6, Margin = new Thickness(-20, 12, -20, -18),
+                Background = Theme.B("Grid"), ClipToBounds = true, Child = _progressFill,
                 VerticalAlignment = VerticalAlignment.Bottom, Visibility = Visibility.Collapsed,
             };
-            _progressTimer.Tick += (s, e) => { _progressPhase = (_progressPhase + 0.7) % 70; Bar(-1); };
+            _progressTrack.SizeChanged += (s, e) =>
+            {
+                _progressWidth = e.NewSize.Width;
+                _progressFill.Width = _progressWidth;
+                if (_flowing) Flow();
+                else
+                {
+                    _progressScale.BeginAnimation(ScaleTransform.ScaleXProperty, null);
+                    _progressScale.ScaleX = _percent < 0 ? 0 : _percent / 100.0;
+                }
+            };
             _ageTimer.Tick += (s, e) => { foreach (var room in _rooms) room.RefreshAge(); };
             _ageTimer.Start();
             _home = host != null && host.TryGetValue("home", out var home) ? home as string : null;
@@ -292,30 +306,28 @@ namespace Hd2Qd.LobbyBrowser
             table.Children.Add(body);
             var card = Theme.Card(table, 0);
 
-            var line = new DockPanel();
+            // Status and the current operation are one stack on the left; Join is the single
+            // primary action on the right. Neither depends on the progress row being present.
+            var info = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            info.Children.Add(_status);
+            info.Children.Add(_progressDetail);
+            var line = new DockPanel { VerticalAlignment = VerticalAlignment.Center };
             DockPanel.SetDock(_join, Dock.Right);
             line.Children.Add(_join);
-            line.Children.Add(_status);
+            line.Children.Add(info);
 
+            // Only one row here. The progress hairline lives in its own row on the root below.
             var bottom = new Grid { Margin = new Thickness(0, 12, 0, 0) };
-            bottom.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            bottom.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            bottom.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            Grid.SetRow(line, 0);
-            _progressDetail.Margin = new Thickness(0, 5, 0, 0);
-            Grid.SetRow(_progressDetail, 1);
-            Grid.SetRow(_progressTrack, 2);
             bottom.Children.Add(line);
-            bottom.Children.Add(_progressDetail);
-            bottom.Children.Add(_progressTrack);
 
             // No ground of our own: the manager already paints Ground900 behind a tab (0.25's
             // acrylic makes that brush translucent so the desktop shows through), and a window
             // host paints it too. Painting it again here stacks two layers — near-black in the
             // middle while the margin shows one — so let the host's ground and texture show.
-            var root = new Grid { Margin = new Thickness(20, 18, 20, 0), MinWidth = 1120, MinHeight = 560, Background = Brushes.Transparent };
+            var root = new Grid { Margin = new Thickness(20, 18, 20, 18), MinWidth = 1120, MinHeight = 560, Background = Brushes.Transparent };
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             // the filters left, the language of this window at the right edge of the same row
             var language = new Button
@@ -332,9 +344,11 @@ namespace Hd2Qd.LobbyBrowser
             Grid.SetRow(top, 0);
             Grid.SetRow(card, 1);
             Grid.SetRow(bottom, 2);
+            Grid.SetRow(_progressTrack, 3);
             root.Children.Add(top);
             root.Children.Add(card);
             root.Children.Add(bottom);
+            root.Children.Add(_progressTrack);
             Root = root;
 
             BuildHeader();
@@ -1075,40 +1089,96 @@ namespace Hd2Qd.LobbyBrowser
             SetStatus(_note == null ? text : text + " · " + _note);
         }
 
-        /// <summary>Stop both timers when the window closes or the body is rebuilt.</summary>
+        /// <summary>Stop the scan's animations and the age clock when the window closes or the
+        /// body is rebuilt for another language.</summary>
         internal void Stop()
         {
-            _progressTimer.Stop();
+            StopProgress();
             _ageTimer.Stop();
+        }
+
+        void StopProgress()
+        {
+            _flowing = false;
+            _progressFill.BeginAnimation(UIElement.OpacityProperty, null);
+            _progressScale.BeginAnimation(ScaleTransform.ScaleXProperty, null);
+            _progressShift.BeginAnimation(TranslateTransform.XProperty, null);
+            _progressScale.ScaleX = 0;
+            _progressShift.X = 0;
+            _progressFill.Opacity = 1;
+            _progressTrack.Visibility = Visibility.Collapsed;
+            _progressDetail.Visibility = Visibility.Collapsed;
         }
 
         void SetStatus(string text)
         {
-            _progressTimer.Stop();
-            _progressTrack.Visibility = Visibility.Collapsed;
-            _progressDetail.Visibility = Visibility.Collapsed;
+            StopProgress();
             _status.Text = text;
             try { _foot?.Invoke(text, "Muted"); } catch { }   // the manager's own status bar
         }
 
-        /// <summary>A determinate slice, or a moving one when the stage has no real counter. The
-        /// three star columns keep the bar correct at any window width.</summary>
+        /// <summary>A real counter eases the fill toward its new width — no sudden jump between
+        /// scan steps. Only ScaleX changes, so the animation stays on the render thread.</summary>
         void Bar(double percent)
         {
-            if (percent >= 0)
+            var from = _progressScale.ScaleX;
+            var wasFlowing = _flowing;
+            _flowing = false;
+            _percent = Math.Max(0, Math.Min(100, percent));
+            _progressFill.BeginAnimation(UIElement.OpacityProperty, null);
+            _progressShift.BeginAnimation(TranslateTransform.XProperty, null);
+            _progressFill.Opacity = 1;
+            _progressScale.BeginAnimation(ScaleTransform.ScaleXProperty, null);
+            _progressScale.ScaleX = wasFlowing ? 0 : from;
+            var target = _percent / 100.0;
+            if (!SystemParameters.ClientAreaAnimation)
             {
-                _progressBefore.Width = new GridLength(0, GridUnitType.Star);
-                _progressBar.Width = new GridLength(Math.Max(1, percent), GridUnitType.Star);
-                _progressAfter.Width = new GridLength(Math.Max(0, 100 - Math.Max(1, percent)), GridUnitType.Star);
-                _progressFill.Opacity = 1;
+                _progressScale.ScaleX = target;
+                return;
             }
-            else
+            var grow = new DoubleAnimation(_progressScale.ScaleX, target, TimeSpan.FromMilliseconds(280))
             {
-                _progressBefore.Width = new GridLength(_progressPhase, GridUnitType.Star);
-                _progressBar.Width = new GridLength(30, GridUnitType.Star);
-                _progressAfter.Width = new GridLength(70 - _progressPhase, GridUnitType.Star);
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+                FillBehavior = FillBehavior.HoldEnd,
+            };
+            _progressScale.BeginAnimation(ScaleTransform.ScaleXProperty, grow);
+        }
+
+        /// <summary>No counter: a short packet fades in at the left edge, crosses the track, and
+        /// fades out at the right. It never reverses at a margin, so an unknown-length wait reads
+        /// as a flow rather than a bouncing object.</summary>
+        void Flow()
+        {
+            _flowing = true;
+            _percent = -1;
+            if (_progressWidth <= 0) return;               // the first layout has not happened yet
+            var dash = _progressWidth * 0.24;
+            _progressScale.BeginAnimation(ScaleTransform.ScaleXProperty, null);
+            _progressScale.ScaleX = 0.24;
+            _progressShift.BeginAnimation(TranslateTransform.XProperty, null);
+            _progressShift.X = -dash;
+            _progressFill.BeginAnimation(UIElement.OpacityProperty, null);
+            _progressFill.Opacity = 0;
+            if (!SystemParameters.ClientAreaAnimation)
+            {
                 _progressFill.Opacity = 0.75;
+                return;
             }
+            var duration = TimeSpan.FromMilliseconds(2400);
+            _progressShift.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(-dash, _progressWidth, duration)
+            {
+                RepeatBehavior = RepeatBehavior.Forever,
+                EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut },
+            });
+            var fade = new DoubleAnimationUsingKeyFrames
+            {
+                Duration = duration, RepeatBehavior = RepeatBehavior.Forever,
+            };
+            fade.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromPercent(0)));
+            fade.KeyFrames.Add(new LinearDoubleKeyFrame(1, KeyTime.FromPercent(0.12)));
+            fade.KeyFrames.Add(new LinearDoubleKeyFrame(1, KeyTime.FromPercent(0.84)));
+            fade.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromPercent(1)));
+            _progressFill.BeginAnimation(UIElement.OpacityProperty, fade);
         }
 
         /// <summary>One line of stage, one line of what is actually happening. Only the planet
@@ -1151,8 +1221,8 @@ namespace Hd2Qd.LobbyBrowser
                     break;
             }
             _progressDetail.Text = detail;
-            if (percent >= 0) { _progressTimer.Stop(); Bar(percent); }
-            else { Bar(-1); _progressTimer.Start(); }
+            if (percent >= 0) Bar(percent);
+            else Flow();
             try { _foot?.Invoke(_status.Text, "Muted"); } catch { }
         }
 
