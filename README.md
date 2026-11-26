@@ -36,16 +36,19 @@ type, with the front column widened for them. The planet picker is a **sector �
 takes a whole sector, children expand underneath it. The war-effect table is warmed at startup as
 upstream does; once ready, the variant menu lists every known type with counts from the current
 results. Ticking a variant adds its planets to the scan targets. Difficulty is filtered from the
-lobby data, as upstream does, rather than in Steam's query.
+lobby data, as upstream does, rather than in Steam's query. Upstream's **Region** filter is there
+too: the seven Steam regions (AS / NA / EU / OC / SA / ME / AF) share one search / select-all /
+invert menu, with a count from the current results, and are applied to the rows after the lobby
+data is read — never passed into the Steam query.
 
 The filter row is one line of three groups, a hairline between them: what opens something
-(Refresh, Planet, Difficulty, Mission, Map, Variant, Presets), the three fronts as chips, and the four switches —
+(Refresh, Planet, Difficulty, Mission, Map, Variant, Region, Presets), the three fronts as chips, and the four switches —
 each a short word on the row (Public, Session, Not full, SOS) with the whole sentence in its tip,
 so the row does not wrap into a ragged second line. A **planet** picked in the picker (search;
 **Select all** / **Invert** for the rows the search shows; a front's chip takes all of its planets)
 makes the scan ask Steam for exactly those planets; a
 **mission** filter narrows the results already in hand, so it costs no scan. **Presets** keep a set of all of that under a name (planets, fronts,
-difficulty, the switches, the missions, the sort) and put it back with one click; they live in
+difficulty, the switches, the missions, the regions, the sort) and put it back with one click; they live in
 `presets.json` in the plugin's folder in the manager's settings. Each name has its own line with
 **Load** and **Delete** beside it, so a long list costs one line a preset — a card of the manager's,
 not a menu item per action.
@@ -126,7 +129,9 @@ The window is drawn in the manager's own theme and never in WPF's: the ground an
 switches, banded rows with the chosen one filled yellow, the thin dark scrollbar. The theme is
 taken from the running manager (`Application.Current.TryFindResource`); `Ui.xaml` holds the same
 styles with their colours written out, for when it is not the manager drawing — a test window, or
-an older manager.
+an older manager. The content root paints no ground of its own: the manager's `Ground900` behind a
+tab (or a window host's) shows through, so Quick Deploy 0.25's acrylic texture stays visible
+instead of being covered by a second layer that turns the centre black.
 
 The scan asks Steam for one planet at a time — the planets the game reports as active, from
 `api.helldivers2.dev` — because Steam answers at most 50 lobbies per request. When that API cannot
@@ -231,11 +236,13 @@ the plugin contract of
 建立时间取自大厅自己公布的创建时间戳，窗口开着时会跟着实际时间走：不足 1 分钟显示 `<1分钟`，
 1–15 分钟显示如 `12分钟前`，超过 15 分钟显示 `>15分钟`，Steam 没给出可用时间则显示 `未知`。
 
-筛选行是一整行三组，组间一条细线：能展开的（刷新、星球、难度、任务、预设）、三条战线 chip、四个开关——
+筛选行是一整行三组，组间一条细线：能展开的（刷新、星球、难度、任务、地图、变种、地区、预设）、三条战线 chip、四个开关——
 开关在行内用短词（公开房 / 有会话 / 未满员 / SOS），完整含义放在悬停提示里，这样一行不会被挤成参差的第二行。
 **星球**选择器（可搜索，**全选 / 反选**只作用于搜索后可见的行，战线 chip 一键全选该战线）让扫描只向 Steam 要这些星球；**任务**筛选只作用于已有结果、
-不重新扫描。**预设**把这些条件
-（星球、战线、难度、开关、任务、排序）连同名字存起来，一键套回；存在管理器设置目录下插件自己的文件夹里的
+不重新扫描。**地区**沿用上游实现：Steam 的七个地区（AS / NA / EU / OC / SA / ME / AF）共用一个可搜索、
+可全选 / 反选的菜单，项旁是当前结果里的房间数；过滤发生在房间数据读出之后，不会写进 Steam 查询。
+**预设**把这些条件
+（星球、战线、难度、开关、任务、地图、变种、地区、排序）连同名字存起来，一键套回；存在管理器设置目录下插件自己的文件夹里的
 `presets.json`。每个名字独占一行，**载入**与**删除**就在同一行右侧——预设再多也只占“每套一行”，
 不随动作数量翻倍。
 
@@ -282,7 +289,8 @@ Steam 没测到的区域才回退到原项目的办法：对 `sdr_pops.json` 节
 窗口用的是管理器自己的主题，不是 WPF 默认控件：`Ground900`/`Ground700` 的底与卡片、`Ghost` 与
 `Primary` 按钮、`Chip` 战线、`Tick` 开关、隔行底色与选中行黄底、细窄深色滚动条。主题优先取运行中的
 管理器（`Application.Current.TryFindResource`）；`Ui.xaml` 是同一套样式写明颜色的副本，供非管理器
-绘制时使用（测试窗口、旧版管理器）。
+绘制时使用（测试窗口、旧版管理器）。内容区不再自己刷底色：直接透出管理器标签页（或窗口宿主）的
+`Ground900`，这样 Quick Deploy 0.25 的亚克力纹理能透上来，不会被第二层底色盖成中间发黑。
 
 ### 星球表与它的限流
 

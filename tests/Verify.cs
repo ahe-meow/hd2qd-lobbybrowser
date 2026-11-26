@@ -91,6 +91,8 @@ namespace Hd2Qd.Verify
                 type.GetField("Name", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(one, "深夜刷样本");
                 ((System.Collections.IList)type.GetField("Planets", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(one)).Add(92);
                 ((System.Collections.IList)type.GetField("Missions", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(one)).Add("1bc57256");
+                ((System.Collections.IList)type.GetField("Regions", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(one)).Add("AS");
+                ((System.Collections.IList)type.GetField("Regions", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(one)).Add("EU");
                 type.GetField("Difficulty", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(one, 7);
                 type.GetField("SortDesc", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(one, true);
                 list.Add(one);
@@ -108,9 +110,10 @@ namespace Hd2Qd.Verify
                 var name = first != null ? (string)type.GetField("Name", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(first) : null;
                 var difficulty = first != null ? (int)type.GetField("Difficulty", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(first) : -1;
                 var planets = first != null ? ((System.Collections.IList)type.GetField("Planets", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(first)).Count : -1;
+                var regionCount = first != null ? ((System.Collections.IList)type.GetField("Regions", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(first)).Count : -1;
                 var sos = back != null && back.Count == 2 ? (bool)type.GetField("SosOnly", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(back[1]) : false;
                 Check("presets round trip", saved == null && back != null && back.Count == 2 && name == "深夜刷样本"
-                    && difficulty == 7 && planets == 1 && sos, "saved=" + (saved ?? "ok") + " count=" + (back == null ? -1 : back.Count));
+                    && difficulty == 7 && planets == 1 && regionCount == 2 && sos, "saved=" + (saved ?? "ok") + " count=" + (back == null ? -1 : back.Count));
             }
             catch (Exception e)
             {
@@ -432,6 +435,8 @@ namespace Hd2Qd.Verify
                 Check(lang + " has the V26–V30 words", words.Contains("filter_map_all") && words.Contains("filter_variant_all")
                     && words.Contains("filter_difficulty_n") && words.Contains("you_here") && words.Contains("api_official")
                     && words.Contains("start_hint") && words.Contains("steam_not_running"));
+                Check(lang + " names the region filter", words.Contains("filter_region_all") &&
+                    words.Contains("filter_region_n") && words.Contains("region_pick") && words.Contains("region_count"));
             }
             var room = asm.GetType("Hd2Qd.LobbyBrowser.Room", false);
             Check("room carries map, variant and joined state", room != null
@@ -445,7 +450,32 @@ namespace Hd2Qd.Verify
             Check("presets carry the new filters", preset != null
                 && preset.GetField("Maps", BindingFlags.NonPublic | BindingFlags.Instance) != null
                 && preset.GetField("Vars", BindingFlags.NonPublic | BindingFlags.Instance) != null
-                && preset.GetField("Difficulties", BindingFlags.NonPublic | BindingFlags.Instance) != null);
+                && preset.GetField("Difficulties", BindingFlags.NonPublic | BindingFlags.Instance) != null
+                && preset.GetField("Regions", BindingFlags.NonPublic | BindingFlags.Instance) != null);
+            var filtersType = asm.GetType("Hd2Qd.LobbyBrowser.Filters", false);
+            Check("filters carry regions to the helper", filtersType != null
+                && filtersType.GetField("Regions", BindingFlags.NonPublic | BindingFlags.Instance) != null);
+            if (filtersType != null)
+            {
+                try
+                {
+                    var filters = Activator.CreateInstance(filtersType, true);
+                    ((System.Collections.IList)filtersType.GetField("Regions", BindingFlags.NonPublic | BindingFlags.Instance)
+                        .GetValue(filters)).Add("NA");
+                    var json = (Dictionary<string, object>)filtersType.GetMethod("ToJson", BindingFlags.NonPublic | BindingFlags.Instance)
+                        .Invoke(filters, null);
+                    var back = filtersType.GetMethod("FromJson", BindingFlags.NonPublic | BindingFlags.Static)
+                        .Invoke(null, new object[] { json });
+                    var regions = (System.Collections.IList)filtersType.GetField("Regions", BindingFlags.NonPublic | BindingFlags.Instance)
+                        .GetValue(back);
+                    Check("region filter survives the helper JSON", json.ContainsKey("regions") &&
+                        regions.Count == 1 && Equals(regions[0], "NA"));
+                }
+                catch (Exception e)
+                {
+                    Check("region filter survives the helper JSON", false, (e.InnerException ?? e).Message);
+                }
+            }
             // The two-line planet cell is built as XAML text; parse it without opening a window.
             var page = asm.GetType("Hd2Qd.LobbyBrowser.LobbyPage", false);
             var theme = asm.GetType("Hd2Qd.LobbyBrowser.Theme", false);
@@ -489,8 +519,20 @@ namespace Hd2Qd.Verify
                 var pageText = File.ReadAllText(pageSrc);
                 Check("planet picker is a grouped tick menu", pickerText.Contains("IsThreeState") &&
                     pageText.Contains("grouped: true") && pageText.Contains("War.PlanetsFor"));
+                // Region is upstream's local filter: the seven codes are ticked in their own
+                // menu and applied to the rows shown, not passed to the Steam lobby query.
+                Check("region filter is a local row filter",
+                    pageText.Contains("void PickRegions()") && pageText.Contains("MatchesRegion(r)") &&
+                    pageText.Contains("_regions.Contains(room.Region.Trim().ToUpperInvariant())") &&
+                    pageText.Contains("var items = new[] { \"AS\", \"NA\", \"EU\", \"OC\", \"SA\", \"ME\", \"AF\" }"));
                 Check("open waits for a manual refresh", !pageText.Contains("shell.Refresh();") &&
                     pageText.Contains("SteamRunning()") && pageText.Contains("steam_not_running"));
+                // 0.25's acrylic paints Ground900 translucent behind a tab. A second, opaque
+                // Ground900 on the content root hides that texture and looks black beside the
+                // margin, so the root must stay transparent and let the host's ground show.
+                Check("content root reuses the manager's ground",
+                    !pageText.Contains("MinHeight = 560, Background = Theme.B(\"Ground900\")") &&
+                    pageText.Contains("var root = new Grid {") && pageText.Contains("Background = Brushes.Transparent"));
                 var warSrc = Path.Combine(root, "War.cs");
                 var warText = File.Exists(warSrc) ? File.ReadAllText(warSrc) : "";
                 Check("variant table warms before the first scan", warText.Contains("new Timer") &&

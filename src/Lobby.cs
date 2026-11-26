@@ -237,6 +237,7 @@ namespace Hd2Qd.LobbyBrowser
         internal List<int> Difficulties = new List<int>();  // V28: 1–10, any when empty
         internal List<int> MapTypes = new List<int>();      // V27: 1–5, "contains any"
         internal List<string> Variants = new List<string>();// V27: variant keys, "contains any"
+        internal List<string> Regions = new List<string>();  // upstream: AS/NA/EU/OC/SA/ME/AF
         internal bool PublicOnly = true;
         internal bool HideNoSession = true;
         internal bool HideFull;
@@ -250,6 +251,7 @@ namespace Hd2Qd.LobbyBrowser
             ["difficulties"] = Difficulties.ConvertAll(d => (object)d),
             ["mapTypes"] = MapTypes.ConvertAll(m => (object)m),
             ["variants"] = Variants.ConvertAll(v => (object)v),
+            ["regions"] = new List<object>(Regions),
             ["publicOnly"] = PublicOnly,
             ["hideNoSession"] = HideNoSession,
             ["hideFull"] = HideFull,
@@ -272,6 +274,8 @@ namespace Hd2Qd.LobbyBrowser
                 foreach (var entry in mapList) if (entry != null) filters.MapTypes.Add(Convert.ToInt32(entry, CultureInfo.InvariantCulture));
             if (d.TryGetValue("variants", out var variants) && variants is System.Collections.IList variantList)
                 foreach (var entry in variantList) if (entry != null) filters.Variants.Add(Convert.ToString(entry, CultureInfo.InvariantCulture));
+            if (d.TryGetValue("regions", out var regions) && regions is System.Collections.IList regionList)
+                foreach (var entry in regionList) if (entry != null) filters.Regions.Add(Convert.ToString(entry, CultureInfo.InvariantCulture));
             if (d.TryGetValue("publicOnly", out var pub) && pub is bool p) filters.PublicOnly = p;
             if (d.TryGetValue("hideNoSession", out var hide) && hide is bool h) filters.HideNoSession = h;
             if (d.TryGetValue("hideFull", out var full) && full is bool f2) filters.HideFull = f2;

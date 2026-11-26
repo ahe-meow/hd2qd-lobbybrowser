@@ -156,6 +156,7 @@ namespace Hd2Qd.LobbyBrowser
         readonly Button _missionButton;
         readonly Button _mapButton;
         readonly Button _variantButton;
+        readonly Button _regionButton;
         readonly Button _presetButton;
         readonly Button _join;
         Popup _openPopup;
@@ -165,6 +166,7 @@ namespace Hd2Qd.LobbyBrowser
         readonly HashSet<string> _missions = new HashSet<string>();     // by mission hash
         readonly HashSet<int> _mapSel = new HashSet<int>();             // V26/V27: contains-any
         readonly HashSet<string> _varSel = new HashSet<string>();       // V27: contains-any
+        readonly HashSet<string> _regions = new HashSet<string>();      // upstream: region codes
         readonly HashSet<int> _difficulties = new HashSet<int>();       // V28: 0 = any
         string _selfLobby = "";                                          // V28: my current lobby
         Room _selfRoom;                                                  // kept across refreshes
@@ -224,6 +226,9 @@ namespace Hd2Qd.LobbyBrowser
             _variantButton = Farm(Words.Get(lang, "filter_variant_all"), "Ghost");
             _variantButton.ToolTip = Words.Get(lang, "variant_tip");
             _variantButton.Click += (s, e) => PickVariants();
+            _regionButton = Farm(Words.Get(lang, "filter_region_all"), "Ghost");
+            _regionButton.ToolTip = Words.Get(lang, "region_tip");
+            _regionButton.Click += (s, e) => PickRegions();
             _presetButton = Farm(Words.Get(lang, "preset"), "Ghost");
             _presetButton.Click += (s, e) => PickPresets();
 
@@ -243,6 +248,7 @@ namespace Hd2Qd.LobbyBrowser
             bar.Children.Add(_missionButton);
             bar.Children.Add(_mapButton);
             bar.Children.Add(_variantButton);
+            bar.Children.Add(_regionButton);
             bar.Children.Add(_presetButton);
             bar.Children.Add(Rule());
             foreach (var front in new[] { "Terminids", "Automatons", "Illuminate" })
@@ -303,7 +309,11 @@ namespace Hd2Qd.LobbyBrowser
             bottom.Children.Add(_progressDetail);
             bottom.Children.Add(_progressTrack);
 
-            var root = new Grid { Margin = new Thickness(20, 18, 20, 0), MinWidth = 1120, MinHeight = 560, Background = Theme.B("Ground900") };
+            // No ground of our own: the manager already paints Ground900 behind a tab (0.25's
+            // acrylic makes that brush translucent so the desktop shows through), and a window
+            // host paints it too. Painting it again here stacks two layers — near-black in the
+            // middle while the margin shows one — so let the host's ground and texture show.
+            var root = new Grid { Margin = new Thickness(20, 18, 20, 0), MinWidth = 1120, MinHeight = 560, Background = Brushes.Transparent };
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -350,6 +360,7 @@ namespace Hd2Qd.LobbyBrowser
             internal HashSet<string> Missions = new HashSet<string>();
             internal HashSet<int> Maps = new HashSet<int>();
             internal HashSet<string> Vars = new HashSet<string>();
+            internal HashSet<string> Regions = new HashSet<string>();
             internal HashSet<int> Difficulties = new HashSet<int>();
             internal string SelfLobby = "";
             internal Room SelfRoom;
@@ -372,6 +383,7 @@ namespace Hd2Qd.LobbyBrowser
             Missions = new HashSet<string>(_missions),
             Maps = new HashSet<int>(_mapSel),
             Vars = new HashSet<string>(_varSel),
+            Regions = new HashSet<string>(_regions),
             Difficulties = new HashSet<int>(_difficulties),
             SelfLobby = _selfLobby,
             SelfRoom = _selfRoom,
@@ -400,6 +412,8 @@ namespace Hd2Qd.LobbyBrowser
             foreach (var map in state.Maps) _mapSel.Add(map);
             _varSel.Clear();
             foreach (var variant in state.Vars) _varSel.Add(variant);
+            _regions.Clear();
+            foreach (var region in state.Regions) _regions.Add(region);
             _difficulties.Clear();
             foreach (var diff in state.Difficulties) _difficulties.Add(diff);
             _selfLobby = state.SelfLobby ?? "";
@@ -709,6 +723,37 @@ namespace Hd2Qd.LobbyBrowser
             WatchPopup(_openPopup);
         }
 
+        /// <summary>Upstream's region chips: seven fixed Steam regions, filtered locally on the
+        /// lobby data (never sent to the Steam query). The count is from the current results.</summary>
+        void PickRegions()
+        {
+            CloseFloats();
+            var counts = new Dictionary<string, int>();
+            foreach (var room in _rooms)
+                if (!string.IsNullOrEmpty(room.Region))
+                {
+                    var key = room.Region.Trim().ToUpperInvariant();
+                    if (!counts.ContainsKey(key)) counts[key] = 1; else counts[key]++;
+                }
+            var items = new[] { "AS", "NA", "EU", "OC", "SA", "ME", "AF" }.Select(key => new Picker.Item
+            {
+                Key = key,
+                Text = Tables.RegionName(key, _lang),
+                Note = Words.F(_lang, "region_count", counts.ContainsKey(key) ? counts[key] : 0),
+                On = _regions.Contains(key),
+            }).ToList();
+            _openPopup = Picker.Show(_regionButton, Words.Get(_lang, "region_pick"), Words.Get(_lang, "filter_search"),
+                Words.Get(_lang, "filter_clear"), Words.Get(_lang, "filter_all"), Words.Get(_lang, "filter_invert"),
+                Words.Get(_lang, "filter_empty"), items, () =>
+                {
+                    _regions.Clear();
+                    foreach (var item in items.Where(i => i.On)) _regions.Add(item.Key);
+                    UpdateFilterLabels();
+                    ShowRows();
+                });
+            WatchPopup(_openPopup);
+        }
+
         /// <summary>V28: only one filter panel at a time. The manager's own menus obey the same
         /// rule, so a Popup or a ContextMenu never stacks over another.</summary>
         void CloseFloats()
@@ -880,6 +925,7 @@ namespace Hd2Qd.LobbyBrowser
             Difficulties = _difficulties.ToList(),
             Maps = _mapSel.ToList(),
             Vars = _varSel.ToList(),
+            Regions = _regions.ToList(),
             PublicOnly = _publicOnly.IsChecked == true,
             HideNoSession = _hideNoSession.IsChecked == true,
             HideFull = _hideFull.IsChecked == true,
@@ -902,6 +948,8 @@ namespace Hd2Qd.LobbyBrowser
             foreach (var map in preset.Maps) _mapSel.Add(map);
             _varSel.Clear();
             foreach (var variant in preset.Vars) _varSel.Add(variant);
+            _regions.Clear();
+            foreach (var region in preset.Regions) _regions.Add(region);
             _publicOnly.IsChecked = preset.PublicOnly;
             _hideNoSession.IsChecked = preset.HideNoSession;
             _hideFull.IsChecked = preset.HideFull;
@@ -938,6 +986,9 @@ namespace Hd2Qd.LobbyBrowser
             _variantButton.Content = _varSel.Count == 0
                 ? Words.Get(_lang, "filter_variant_all")
                 : Words.F(_lang, "filter_variant_n", _varSel.Count);
+            _regionButton.Content = _regions.Count == 0
+                ? Words.Get(_lang, "filter_region_all")
+                : Words.F(_lang, "filter_region_n", _regions.Count);
             _difficulty.Content = _difficulties.Count == 0
                 ? Words.Get(_lang, "diff_any")
                 : Words.F(_lang, "filter_difficulty_n", _difficulties.Count);
@@ -979,13 +1030,15 @@ namespace Hd2Qd.LobbyBrowser
         bool MatchesMission(Room room) => _missions.Count == 0 || _missions.Contains(room.MissionHash ?? "");
         bool MatchesMap(Room room) => _mapSel.Count == 0 || room.MapTypes.Any(t => _mapSel.Contains(t));
         bool MatchesVariant(Room room) => _varSel.Count == 0 || room.Variants.Any(v => _varSel.Contains(v));
+        bool MatchesRegion(Room room) => _regions.Count == 0 ||
+            (!string.IsNullOrEmpty(room.Region) && _regions.Contains(room.Region.Trim().ToUpperInvariant()));
         bool MatchesDifficulty(Room room) => _difficulties.Count == 0 || _difficulties.Contains(room.Difficulty);
 
         /// <summary>The rows as the filters leave them, sorted, with this player's room pinned:
         /// what the list shows and what the count in the status bar speaks of.</summary>
         void ShowRows()
         {
-            var rooms = _rooms.Where(r => MatchesMission(r) && MatchesMap(r) && MatchesVariant(r) && MatchesDifficulty(r)).ToList();
+            var rooms = _rooms.Where(r => MatchesMission(r) && MatchesMap(r) && MatchesVariant(r) && MatchesRegion(r) && MatchesDifficulty(r)).ToList();
             rooms.Sort(Compare);
             // V28: the room you joined stays at the top even after a refresh, and even when a
             // filter would otherwise hide it — the cached room is used when it is not in the list.
@@ -1111,6 +1164,7 @@ namespace Hd2Qd.LobbyBrowser
                 Difficulties = _difficulties.ToList(),
                 MapTypes = _mapSel.ToList(),
                 Variants = _varSel.ToList(),
+                Regions = _regions.ToList(),
                 PublicOnly = _publicOnly.IsChecked == true,
                 HideNoSession = _hideNoSession.IsChecked == true,
                 HideFull = _hideFull.IsChecked == true,

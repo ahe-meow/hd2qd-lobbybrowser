@@ -17,6 +17,7 @@ namespace Hd2Qd.LobbyBrowser
         internal List<int> Difficulties = new List<int>();
         internal List<int> Maps = new List<int>();
         internal List<string> Vars = new List<string>();
+        internal List<string> Regions = new List<string>();
         internal bool PublicOnly = true;
         internal bool HideNoSession = true;
         internal bool HideFull;
@@ -34,6 +35,7 @@ namespace Hd2Qd.LobbyBrowser
             ["difficulties"] = Difficulties.ConvertAll(d => (object)d),
             ["maps"] = Maps.ConvertAll(m => (object)m),
             ["vars"] = new List<object>(Vars),
+            ["regions"] = new List<object>(Regions),
             ["publicOnly"] = PublicOnly,
             ["hideNoSession"] = HideNoSession,
             ["hideFull"] = HideFull,
@@ -56,6 +58,8 @@ namespace Hd2Qd.LobbyBrowser
                 }
             if (d.TryGetValue("vars", out var vars) && vars is System.Collections.IList varList)
                 foreach (var v in varList) if (v != null) preset.Vars.Add(Convert.ToString(v));
+            if (d.TryGetValue("regions", out var regions) && regions is System.Collections.IList regionList)
+                foreach (var v in regionList) if (v != null) preset.Regions.Add(Convert.ToString(v));
             preset.PublicOnly = Flag(d, "publicOnly", true);
             preset.HideNoSession = Flag(d, "hideNoSession", true);
             preset.HideFull = Flag(d, "hideFull", false);
