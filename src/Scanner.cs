@@ -49,8 +49,10 @@ namespace Hd2Qd.LobbyBrowser
             foreach (var planet in targets)
             {
                 progress?.Invoke(++done, targets.Count);
-                var batch = steam.Query(planet, filters.Difficulty, filters.PublicOnly, null, 0, 0);
-                if (filters.Difficulty == 0 && batch.Count >= SplitAt)
+                // like upstream: let Steam return every difficulty, then filter the rows here.
+                // Filtering in Steam's query drops rooms whose published difficulty is stale.
+                var batch = steam.Query(planet, 0, filters.PublicOnly, null, 0, 0);
+                if (batch.Count >= SplitAt)
                     foreach (var range in new[] { new[] { "17", "5", "-2" }, new[] { "17", "6", "2" } })
                         foreach (var id in steam.Query(planet, 0, filters.PublicOnly, range[0],
                                      int.Parse(range[1], CultureInfo.InvariantCulture), int.Parse(range[2], CultureInfo.InvariantCulture)))
@@ -71,8 +73,9 @@ namespace Hd2Qd.LobbyBrowser
             }
 
             var matched = rooms.Where(r => Match(r, filters)).ToList();
-            if (filters.Difficulty > 0)
-                matched = matched.Where(r => r.Difficulty == filters.Difficulty).ToList();
+            var diffs = new HashSet<int>(filters.Difficulties);
+            if (filters.Difficulty > 0) diffs.Add(filters.Difficulty);
+            if (diffs.Count > 0) matched = matched.Where(r => diffs.Contains(r.Difficulty)).ToList();
             steam.Names(matched);
             foreach (var r in matched) r.Dress(lang);
             matched.Sort((a, b) => a.Members != b.Members ? b.Members.CompareTo(a.Members)

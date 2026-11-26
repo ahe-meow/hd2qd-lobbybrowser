@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Globalization;
+using System.Linq;
 
 namespace Hd2Qd.LobbyBrowser
 {
@@ -82,9 +83,10 @@ namespace Hd2Qd.LobbyBrowser
         public string PingText { get; set; }
         public string PrivacyText { get; set; }
         public string PlatformText { get; set; }
-        /// <summary>The planet column's second line: sector, map type(s), variant(s). Never a
-        /// separate column — upstream shows these under the planet name too.</summary>
+        /// <summary>The planet column's second line: sector and map type(s).</summary>
         public string SubText { get; set; }
+        /// <summary>The front column's second line: planet-level variants, under the front name.</summary>
+        public string VariantText { get; set; }
         /// <summary>V28: the lobby this player is in, pinned to the top and tinted gold.</summary>
         public bool IsMine { get; set; }
 
@@ -100,9 +102,9 @@ namespace Hd2Qd.LobbyBrowser
             var sector = Tables.Sector(Planet, lang);
             if (!string.IsNullOrEmpty(sector)) sub.Add(sector);
             foreach (var type in MapTypes) sub.Add(Tables.MapTypeName(type, lang));
-            foreach (var variant in Variants) sub.Add(Tables.VariantName(variant, lang));
             SubText = string.Join(" · ", sub);
             FrontText = Tables.FrontShort(Front, lang);
+            VariantText = string.Join(" · ", Variants.Select(v => Tables.VariantName(v, lang)));
             DifficultyText = Difficulty > 0 ? Words.F(lang, "diff_n", Difficulty) : "—";
             MembersText = Members + "/" + (Limit > 0 ? Limit : 4);
             RegionText = string.IsNullOrEmpty(Region) ? Words.Get(lang, "no_host") : Tables.RegionName(Region, lang);

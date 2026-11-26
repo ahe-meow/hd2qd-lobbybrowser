@@ -3,7 +3,8 @@
 A plugin of [HD2 Mod Quick Deploy](https://github.com/pat-pat-patrick/hd2-mod-cli): the public
 lobbies of Helldivers 2, listed **as a tab of the manager's window** (Quick Deploy 0.25.0 and
 later), so you pick the one you join instead of the game's random matchmaking. Older managers and
-the single-file program still open it in a window of its own.
+the single-file program still open it in a window of its own. It opens idle: click **Refresh** to
+scan; if the Steam client is not running, refresh asks you to start it first.
 
 Adapted from [HD2LobbyBrowser](https://github.com/ahe-meow/HD2LobbyBrowser) (MIT) — the lobby scan,
 the lobby keys and the name tables are that program's, ported to a manager plugin. Features are
@@ -28,7 +29,14 @@ and only one panel or menu stays open at a time. The count above the table follo
 not the raw scan. The room you are already in is pinned to the top, tinted gold, and survives a
 refresh; its button reads **You are here**. When the community planet API is unavailable or
 returns an all-zero table, the planet choice falls back to the game's own WarSeason status and
-caches it, instead of degenerating into one worldwide query.
+caches it, instead of degenerating into one worldwide query. A planet the live table did not label
+still gets its front from the bundled game table. The planet cell carries a second line with the
+sector and map type; the front cell carries the variants under the front name, in the same small
+type, with the front column widened for them. The planet picker is a **sector → planet** tick menu: one tick box
+takes a whole sector, children expand underneath it. The war-effect table is warmed at startup as
+upstream does; once ready, the variant menu lists every known type with counts from the current
+results. Ticking a variant adds its planets to the scan targets. Difficulty is filtered from the
+lobby data, as upstream does, rather than in Steam's query.
 
 The filter row is one line of three groups, a hairline between them: what opens something
 (Refresh, Planet, Difficulty, Mission, Map, Variant, Presets), the three fronts as chips, and the four switches —

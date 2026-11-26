@@ -143,7 +143,7 @@ namespace Hd2Qd.LobbyBrowser
             foreach (var front in lines)
             {
                 var candidates = _counts
-                    .Where(kv => kv.Key > 0 && kv.Value > 0 && (_fronts.TryGetValue(kv.Key, out var f) ? f : null) == front)
+                    .Where(kv => kv.Key > 0 && kv.Value > 0 && Front(kv.Key) == front)
                     .OrderByDescending(kv => kv.Value)
                     .Select(kv => kv.Key)
                     .Take(per);
@@ -151,6 +151,13 @@ namespace Hd2Qd.LobbyBrowser
             }
             return picks.Take(20).ToList();
         }
+
+        /// <summary>The live table wins; the game's own static faction table fills in a planet
+        /// the API did not label. Without this, one missing owner drops a whole front's planets
+        /// and the scan falls back to a single worldwide query.</summary>
+        static string Front(int planet) =>
+            _fronts.TryGetValue(planet, out var live) && !string.IsNullOrEmpty(live) ? live
+            : Tables.PlanetFront.TryGetValue(planet, out var known) ? known : null;
 
         static void Fetch(string home, string lang, out string note)
         {

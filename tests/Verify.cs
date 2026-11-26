@@ -430,7 +430,8 @@ namespace Hd2Qd.Verify
                 var stream = names.Contains("Lang." + lang + ".json") ? asm.GetManifestResourceStream("Lang." + lang + ".json") : null;
                 var words = stream == null ? "" : new StreamReader(stream).ReadToEnd();
                 Check(lang + " has the V26–V30 words", words.Contains("filter_map_all") && words.Contains("filter_variant_all")
-                    && words.Contains("filter_difficulty_n") && words.Contains("you_here") && words.Contains("api_official"));
+                    && words.Contains("filter_difficulty_n") && words.Contains("you_here") && words.Contains("api_official")
+                    && words.Contains("start_hint") && words.Contains("steam_not_running"));
             }
             var room = asm.GetType("Hd2Qd.LobbyBrowser.Room", false);
             Check("room carries map, variant and joined state", room != null
@@ -445,6 +446,84 @@ namespace Hd2Qd.Verify
                 && preset.GetField("Maps", BindingFlags.NonPublic | BindingFlags.Instance) != null
                 && preset.GetField("Vars", BindingFlags.NonPublic | BindingFlags.Instance) != null
                 && preset.GetField("Difficulties", BindingFlags.NonPublic | BindingFlags.Instance) != null);
+            // The two-line planet cell is built as XAML text; parse it without opening a window.
+            var page = asm.GetType("Hd2Qd.LobbyBrowser.LobbyPage", false);
+            var theme = asm.GetType("Hd2Qd.LobbyBrowser.Theme", false);
+            var rowXaml = page?.GetProperty("Row", BindingFlags.NonPublic | BindingFlags.Static)?.GetValue(null) as string;
+            var parse = theme?.GetMethod("Parse", BindingFlags.NonPublic | BindingFlags.Static);
+            try
+            {
+                var template = rowXaml != null && parse != null
+                    ? parse.MakeGenericMethod(typeof(DataTemplate)).Invoke(null, new object[] { rowXaml }) : null;
+                Check("lobby row binds planet and front detail lines", template is DataTemplate &&
+                    rowXaml.Contains("{Binding SubText}") && rowXaml.Contains("{Binding VariantText}") &&
+                    room.GetProperty("VariantText") != null);
+            }
+            catch (Exception e)
+            {
+                Check("lobby row binds planet and front detail lines", false, (e.InnerException ?? e).Message);
+            }
+            // A variant is planet-level: ticking it must add its planets to the scan targets.
+            var war = asm.GetType("Hd2Qd.LobbyBrowser.War", false);
+            var forVariants = war?.GetMethod("PlanetsFor", BindingFlags.NonPublic | BindingFlags.Static);
+            if (forVariants == null)
+                Check("variant tick adds its planets to the scan", false, "War.PlanetsFor missing");
+            else
+            {
+                var effects = new Dictionary<int, List<string>>
+                {
+                    [7] = new List<string> { "votesnatch", "invasion" },
+                    [8] = new List<string> { "jet" },
+                };
+                var targets = (System.Collections.IEnumerable)forVariants.Invoke(null,
+                    new object[] { effects, new List<string> { "VOTESNATCH" } });
+                Check("variant tick adds its planets to the scan", targets.Cast<int>().SequenceEqual(new[] { 7 }));
+            }
+            // The planet picker is a sector → planet tick menu, not a wall of sector chips.
+            var root = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(dll), "..", "src"));
+            var pickerSrc = Path.Combine(root, "Picker.cs");
+            var pageSrc = Path.Combine(root, "BrowserWindow.cs");
+            if (File.Exists(pickerSrc) && File.Exists(pageSrc))
+            {
+                var pickerText = File.ReadAllText(pickerSrc);
+                var pageText = File.ReadAllText(pageSrc);
+                Check("planet picker is a grouped tick menu", pickerText.Contains("IsThreeState") &&
+                    pageText.Contains("grouped: true") && pageText.Contains("War.PlanetsFor"));
+                Check("open waits for a manual refresh", !pageText.Contains("shell.Refresh();") &&
+                    pageText.Contains("SteamRunning()") && pageText.Contains("steam_not_running"));
+                var warSrc = Path.Combine(root, "War.cs");
+                var warText = File.Exists(warSrc) ? File.ReadAllText(warSrc) : "";
+                Check("variant table warms before the first scan", warText.Contains("new Timer") &&
+                    warText.Contains("X-Super-Client") && warText.Contains("Accept-Language") &&
+                    pageText.Contains("War.Warm(_home)") && pageText.Contains("Tables.VariantKeys()"));
+            }
+            // A planet the live API did not label must still be picked from the static front
+            // table. Without it a front can disappear from the scan entirely.
+            var live = asm.GetType("Hd2Qd.LobbyBrowser.Live", false);
+            var flags = BindingFlags.NonPublic | BindingFlags.Static;
+            var counts = live?.GetField("_counts", flags);
+            var fronts = live?.GetField("_fronts", flags);
+            var choose = live?.GetMethod("Choose", flags);
+            if (counts == null || fronts == null || choose == null)
+                Check("planet pick falls back to the static front table", false, "Live.Choose missing");
+            else
+            {
+                var savedCounts = counts.GetValue(null);
+                var savedFronts = fronts.GetValue(null);
+                try
+                {
+                    counts.SetValue(null, new Dictionary<int, int> { [2] = 11 });
+                    fronts.SetValue(null, new Dictionary<int, string>());
+                    var picked = (System.Collections.IEnumerable)choose.Invoke(null,
+                        new object[] { new List<string> { "Terminids" }, 0 });
+                    Check("planet pick falls back to the static front table", picked.Cast<int>().Contains(2));
+                }
+                finally
+                {
+                    counts.SetValue(null, savedCounts);
+                    fronts.SetValue(null, savedFronts);
+                }
+            }
         }
 
         static string Home()
@@ -465,6 +544,7 @@ namespace Hd2Qd.Verify
             if (timed != null) return ShowWindow(path,
                 double.Parse(timed.Substring(11), System.Globalization.CultureInfo.InvariantCulture), "progress.png");
             if (args.Contains("--api")) return CheckApi(path);
+            if (args.Contains("--war")) return CheckWar(path);
             if (args.Contains("--helper")) return ProbeHelper(path, args[args.Length - 1]);
             if (args.Contains("--presets")) return ShowPresets(path);
             Console.WriteLine("Plugin: " + path);
@@ -553,6 +633,32 @@ namespace Hd2Qd.Verify
             if (method == null) return false;
             var texts = langs.Select(l => (string)method.Invoke(null, new object[] { l })).ToArray();
             return texts.All(t => !string.IsNullOrWhiteSpace(t) && t != member) && texts.Distinct().Count() > 1;
+        }
+
+        /// <summary>The war-effect table the variant menu reads, asked the way the plugin asks
+        /// it. Opt-in: this one really calls the community/official war-status API.</summary>
+        static int CheckWar(string path)
+        {
+            var asm = Assembly.LoadFrom(path);
+            var war = asm.GetType("Hd2Qd.LobbyBrowser.War", false);
+            var effects = war?.GetMethod("Effects", BindingFlags.NonPublic | BindingFlags.Static);
+            if (effects == null) { Check("war table answers", false, "War.Effects missing"); return 1; }
+            try
+            {
+                var home = Path.Combine(Home(), "war-" + Guid.NewGuid().ToString("N"));
+                var table = (System.Collections.IDictionary)effects.Invoke(null, new object[] { home });
+                var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (System.Collections.DictionaryEntry pair in table)
+                    if (pair.Value is System.Collections.IEnumerable values)
+                        foreach (var value in values) keys.Add(Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture));
+                Check("war table answers", table.Count > 0 && keys.Count > 0,
+                    table.Count + " planets, " + keys.Count + " variants: " + string.Join(",", keys.OrderBy(k => k)));
+            }
+            catch (Exception e)
+            {
+                Check("war table answers", false, (e.InnerException ?? e).Message);
+            }
+            return _failed == 0 ? 0 : 1;
         }
 
         /// <summary>The planet table the scan picks its targets from, asked the way the plugin

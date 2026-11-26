@@ -28,14 +28,12 @@ namespace Hd2Qd.LobbyBrowser
                 // The tab has no window of its own. Shell stops its timers when the manager
                 // closes the tab, and tells Plugin so a later Open shows this tab again.
                 var handle = tab(Words.Get(shell.Lang, "title"), shell.Root, shell.Close);
-                shell.Refresh();
                 return handle.TryGetValue("show", out var show) ? show as Action : null;
             }
             var make = (Func<string, FrameworkElement, Window>)host["window"];
             var window = make(Words.Get(shell.Lang, "title"), shell.Root);
             shell.Host = window;
             window.Show();
-            shell.Refresh();
             return null;
         }
     }
@@ -58,6 +56,7 @@ namespace Hd2Qd.LobbyBrowser
             _host = host;
             _closed = closed;
             _home = host != null && host.TryGetValue("home", out var home) ? home as string : null;
+            War.Warm(_home);                   // upstream WAR.warm(): variants ready before the first scan
             _handed = Words.Lang(host);
             Lang = Language.Chosen(_home) ?? Language.Manager(_home, _handed);
             Show(null);
@@ -109,7 +108,8 @@ namespace Hd2Qd.LobbyBrowser
         enum Sort { Planet, Front, Diff, Members, Mission, Privacy, Platform, Region, Ping, Host, Age }
 
         // the table's columns, in the same stars in the header and in every row
-        static readonly double[] Columns = { 1.4, 0.8, 0.65, 0.6, 1.35, 0.55, 0.55, 0.6, 0.36, 0.68, 0.95, 0.5 };
+        // the front column carries the variant names under the front, so it needs room
+        static readonly double[] Columns = { 1.25, 1.3, 0.6, 0.58, 1.25, 0.55, 0.5, 0.55, 0.36, 0.62, 0.85, 0.48 };
         static readonly string[] Heads = { "col_planet", "col_front", "col_diff", "col_members", "col_mission", "col_priv", "col_platform", "col_region", "col_sos", "col_ping", "col_host", "col_age" };
         static readonly bool[] AlignRight = { false, false, false, true, false, false, false, false, false, true, false, true };
         static readonly bool[] Numeric = { false, false, false, true, false, false, false, false, false, true, false, true };
@@ -169,12 +169,14 @@ namespace Hd2Qd.LobbyBrowser
         string _selfLobby = "";                                          // V28: my current lobby
         Room _selfRoom;                                                  // kept across refreshes
         List<Room> _rooms = new List<Room>();
+        Dictionary<int, List<string>> _effects = new Dictionary<int, List<string>>();  // V27: planet -> variants
         Dictionary<string, int> _steamPings = new Dictionary<string, int>();
         int _difficultyValue;
         string _self = "0";
         Sort _sort = Sort.Members;
         bool _sortDesc = true;
         bool _busy;
+        bool _showHint = true;                 // first open: wait for a manual Refresh
         string _note;
         int _pingRound;
 
@@ -331,8 +333,7 @@ namespace Hd2Qd.LobbyBrowser
                 Restore(state);
                 foreach (var room in _rooms) room.Dress(lang);   // a language switch rebuilds the body
             }
-            _empty.Text = Words.Get(lang, "empty");
-            _empty.Visibility = Visibility.Collapsed;
+            _showHint = state == null || state.Rooms.Count == 0;
             ShowRows();
             if (state != null && state.Rooms.Count > 0) SetFoundText(state.Rooms.Count);
             else SetStatus(Words.Get(lang, "ready"));
@@ -540,7 +541,7 @@ namespace Hd2Qd.LobbyBrowser
             {
                 var xaml =
                     "<DataTemplate xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation'>" +
-                    "<Grid Height='34'><Grid.ColumnDefinitions>";
+                    "<Grid Height='44'><Grid.ColumnDefinitions>";
                 foreach (var star in Columns)
                     xaml += "<ColumnDefinition Width='" + star.ToString(CultureInfo.InvariantCulture) + "*'/>";
                 xaml +=
@@ -577,6 +578,24 @@ namespace Hd2Qd.LobbyBrowser
                                 "<DataTrigger Binding='{Binding SosText}' Value=''><Setter Property='Visibility' Value='Collapsed'/></DataTrigger>" +
                                 "</Style.Triggers></Style></Border.Style>" +
                                 "<TextBlock Text='SOS' FontSize='10' FontWeight='Bold' Foreground='$TapeInk$' Margin='0'/></Border>";
+                        continue;
+                    }
+                    if (i == 0)
+                    {
+                        // the planet cell carries the sector and map type under its name
+                        xaml += "<StackPanel Grid.Column='0' Margin='0,0,10,0' VerticalAlignment='Center'>" +
+                                "<TextBlock Text='{Binding PlanetText}' FontSize='13' FontWeight='SemiBold'/>" +
+                                "<TextBlock Text='{Binding SubText}' FontSize='11' Opacity='0.78'/>" +
+                                "</StackPanel>";
+                        continue;
+                    }
+                    if (i == 1)
+                    {
+                        // variants are planet-level; they read under the front, in the same small type
+                        xaml += "<StackPanel Grid.Column='1' Margin='0,0,10,0' VerticalAlignment='Center'>" +
+                                "<TextBlock Text='{Binding FrontText}' FontSize='13'/>" +
+                                "<TextBlock Text='{Binding VariantText}' FontSize='11' Opacity='0.78' TextWrapping='Wrap' TextTrimming='None'/>" +
+                                "</StackPanel>";
                         continue;
                     }
                     var extra = AlignRight[i] ? " TextAlignment='Right' Margin='0,0,16,0'" : "";
@@ -662,6 +681,14 @@ namespace Hd2Qd.LobbyBrowser
             var counts = new Dictionary<string, int>();
             foreach (var room in _rooms) foreach (var variant in room.Variants)
                 if (!counts.ContainsKey(variant)) counts[variant] = 1; else counts[variant]++;
+            // Upstream's warReady is bool(WAR and WAR.planets); when true, buildVarPanel lists
+            // every VARLABELS key with a count from the current rooms. Match that exactly.
+            _effects = War.Effects(_home);
+            if (_effects.Count == 0)
+            {
+                SetStatus(Words.Get(_lang, "variant_empty"));
+                return;
+            }
             var items = Tables.VariantKeys().OrderByDescending(k => counts.ContainsKey(k) ? counts[k] : 0)
                 .ThenBy(k => Tables.VariantName(k, _lang)).Select(k => new Picker.Item
                 {
@@ -702,8 +729,8 @@ namespace Hd2Qd.LobbyBrowser
             menu.Closed += (s, e) => { if (ReferenceEquals(_openMenu, menu)) _openMenu = null; };
         }
 
-        /// <summary>The planets the scan should ask for, by name in the manager's language; a
-        /// front's chip over the list takes or leaves all of its planets at once.</summary>
+        /// <summary>The planets the scan should ask for, by name in the manager's language, in a
+        /// sector → planet menu: a sector's own tick box takes or leaves all its planets.</summary>
         void PickPlanets()
         {
             CloseFloats();
@@ -734,7 +761,7 @@ namespace Hd2Qd.LobbyBrowser
                         if (int.TryParse(item.Key, NumberStyles.Integer, CultureInfo.InvariantCulture, out index)) _planets.Add(index);
                     }
                     UpdateFilterLabels();
-                });
+                }, grouped: true);
             WatchPopup(_openPopup);
         }
 
@@ -970,7 +997,7 @@ namespace Hd2Qd.LobbyBrowser
             }
             foreach (var room in _rooms) room.IsMine = room.Lobby == mine?.Lobby;
             _list.ItemsSource = rooms;
-            _empty.Text = Words.Get(_lang, "empty");
+            _empty.Text = Words.Get(_lang, rooms.Count == 0 && _showHint ? "start_hint" : "empty");
             _empty.Visibility = rooms.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
             SyncJoin(null);
             SetFoundText(rooms.Count);
@@ -1097,19 +1124,36 @@ namespace Hd2Qd.LobbyBrowser
             return filters;
         }
 
+        static bool SteamRunning()
+        {
+            try { return Process.GetProcessesByName("steam").Length > 0; }
+            catch { return false; }
+        }
+
         internal void Refresh()
         {
             if (_busy) return;
+            var lang = _lang;
+            if (!SteamRunning())
+            {
+                _showHint = false;
+                SetStatus(Words.Get(lang, "steam_not_running"));
+                _empty.Text = Words.Get(lang, "steam_not_running");
+                _empty.Visibility = Visibility.Visible;
+                return;
+            }
             _busy = true;
             _refresh.IsEnabled = false;
-            var lang = _lang;
             SetProgress("planets", 0, 0, null, lang);
+            _showHint = false;
+            _empty.Visibility = Visibility.Collapsed;
             var filters = Read();
             var manual = _planets.Count > 0;
             var fronts = filters.Fronts.ToList();
             // V28: with several difficulties ticked, Live only needs to know "a filter is on"
             // to pick the deeper set of planets; the exact values are applied to the rows here.
             var difficulty = _difficulties.Count > 0 ? 1 : _difficultyValue;
+            var variants = _varSel.ToList();
             var dispatcher = _shell.Host != null ? _shell.Host.Dispatcher : Dispatcher.CurrentDispatcher;
             Task.Run(() =>
             {
@@ -1121,6 +1165,9 @@ namespace Hd2Qd.LobbyBrowser
                     var targets = Live.Pick(fronts, difficulty, _home, lang, out note);
                     filters.Planets.AddRange(targets);
                 }
+                // A variant lives on planets, not in lobby data. Include those planets even when
+                // they are not among the busiest ones picked above, or the filter finds nothing.
+                filters.Planets.AddRange(War.PlanetsFor(War.Effects(_home), variants));
                 var planets = filters.Planets.Distinct().Take(20).ToList();
                 dispatcher.BeginInvoke((Action)(() => SetProgress("steam", 0, 0, planets, lang)));
                 var result = Helper.Scan(_home, filters, lang,
@@ -1158,7 +1205,8 @@ namespace Hd2Qd.LobbyBrowser
             // V26/V27: map types come from the mission hash; variants are planet-level war
             // effects. Both are computed here, in the manager, so the helper's Steam session
             // stays short and the HTTP stays out of it (Live.cs's design constraint).
-            var effects = War.Effects(_home);
+            _effects = War.Effects(_home);
+            var effects = _effects;
             foreach (var room in _rooms)
             {
                 if (room.MapTypes.Count == 0) room.MapTypes = Tables.MapTypes(room.MissionHash);

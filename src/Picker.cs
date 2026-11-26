@@ -10,8 +10,9 @@ using System.Windows.Media;
 namespace Hd2Qd.LobbyBrowser
 {
     /// <summary>A list to pick several things from, in the manager's own parts: a card of
-    /// Ground700 with a grid line, an Input for the search, Chips for the fronts, Tick rows —
-    /// the shape its own dialogs take, not a Windows list box.</summary>
+    /// Ground700 with a grid line, an Input for the search and Tick rows. With grouped=true the
+    /// groups become expandable rows with their own tick box, so a planet picker reads
+    /// sector → planet instead of filling the popup with sector chips.</summary>
     internal static class Picker
     {
         internal sealed class Item
@@ -19,7 +20,7 @@ namespace Hd2Qd.LobbyBrowser
             internal string Key;
             internal string Text;
             internal string Note;
-            internal string Group;      // the front's name: the chips over the list
+            internal string Group;      // sector for planets; a group header/chip when present
             internal bool On;
         }
 
@@ -28,7 +29,8 @@ namespace Hd2Qd.LobbyBrowser
         internal static bool Matches(Item item, string needle) =>
             string.IsNullOrEmpty(needle) ||
             (item.Text ?? "").IndexOf(needle, StringComparison.CurrentCultureIgnoreCase) >= 0 ||
-            (item.Note ?? "").IndexOf(needle, StringComparison.CurrentCultureIgnoreCase) >= 0;
+            (item.Note ?? "").IndexOf(needle, StringComparison.CurrentCultureIgnoreCase) >= 0 ||
+            (item.Group ?? "").IndexOf(needle, StringComparison.CurrentCultureIgnoreCase) >= 0;
 
         /// <summary>Select all matching rows, or flip them — the two buttons above the list.</summary>
         internal static void Choose(List<Item> items, string needle, bool select)
@@ -38,7 +40,8 @@ namespace Hd2Qd.LobbyBrowser
         }
 
         internal static Popup Show(FrameworkElement anchor, string title, string hint,
-            string clear, string all, string invert, string empty, List<Item> items, Action changed)
+            string clear, string all, string invert, string empty, List<Item> items, Action changed,
+            bool grouped = false)
         {
             var popup = new Popup
             {
@@ -51,46 +54,106 @@ namespace Hd2Qd.LobbyBrowser
             };
             var list = new StackPanel();
             var search = new TextBox { Style = Theme.S("Input"), Tag = hint, Margin = new Thickness(0, 10, 0, 8) };
-            var chips = new WrapPanel();
+            var chips = new StackPanel { Orientation = Orientation.Horizontal };
             var groups = items.Select(i => i.Group).Where(g => !string.IsNullOrEmpty(g)).Distinct().ToList();
+            var expanded = new HashSet<string>(StringComparer.CurrentCultureIgnoreCase);
+
+            Border Row(Item item)
+            {
+                var row = new Grid();
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                var box = new CheckBox
+                {
+                    Style = Theme.S("Tick"),
+                    IsChecked = item.On,
+                    Content = new TextBlock
+                    {
+                        Text = item.Text, FontSize = 14, TextTrimming = TextTrimming.CharacterEllipsis,
+                        VerticalAlignment = VerticalAlignment.Center,
+                    },
+                    Margin = new Thickness(0, 0, 8, 0),
+                };
+                box.Click += (s, e) => { item.On = box.IsChecked == true; changed(); if (grouped) Paint(); };
+                row.Children.Add(box);
+                if (!string.IsNullOrEmpty(item.Note))
+                {
+                    var note = new TextBlock
+                    {
+                        Text = item.Note, FontSize = 11, Foreground = Theme.B("Muted"),
+                        VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 2, 0),
+                    };
+                    Grid.SetColumn(note, 1);
+                    row.Children.Add(note);
+                }
+                return new Border { Padding = new Thickness(2, 3, 2, 3), Child = row };
+            }
 
             void Paint()
             {
                 list.Children.Clear();
                 var needle = (search.Text ?? "").Trim();
                 var shown = 0;
-                foreach (var item in items)
+                if (grouped && groups.Count > 0)
                 {
-                    if (!Matches(item, needle)) continue;
-                    shown++;
-                    var row = new Grid();
-                    row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                    row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                    var box = new CheckBox
+                    foreach (var group in items.Where(i => Matches(i, needle))
+                        .GroupBy(i => i.Group ?? "").OrderBy(g => g.Key, StringComparer.CurrentCulture))
                     {
-                        Style = Theme.S("Tick"),
-                        IsChecked = item.On,
-                        Content = new TextBlock
+                        shown++;
+                        var rows = group.ToList();
+                        var on = rows.Count(i => i.On);
+                        var open = needle != "" || expanded.Contains(group.Key);
+                        var header = new Grid();
+                        header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                        header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                        var arrow = new Button
                         {
-                            Text = item.Text, FontSize = 14, TextTrimming = TextTrimming.CharacterEllipsis,
+                            Content = open ? "▾" : "▸", Style = Theme.S("Ghost"), Width = 22, MinHeight = 22,
+                            Padding = new Thickness(0), Margin = new Thickness(0), FontSize = 12,
                             VerticalAlignment = VerticalAlignment.Center,
-                        },
-                        Margin = new Thickness(0, 0, 8, 0),
-                    };
-                    box.Click += (s, e) => { item.On = box.IsChecked == true; changed(); };
-                    row.Children.Add(box);
-                    if (!string.IsNullOrEmpty(item.Note))
-                    {
-                        var note = new TextBlock
-                        {
-                            Text = item.Note, FontSize = 11, Foreground = Theme.B("Muted"),
-                            VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 2, 0),
                         };
-                        Grid.SetColumn(note, 1);
-                        row.Children.Add(note);
+                        arrow.Click += (s, e) =>
+                        {
+                            if (!expanded.Add(group.Key)) expanded.Remove(group.Key);
+                            Paint();
+                        };
+                        header.Children.Add(arrow);
+                        var headBox = new CheckBox
+                        {
+                            Style = Theme.S("Tick"), IsThreeState = true,
+                            IsChecked = on == rows.Count ? true : on > 0 ? (bool?)null : false,
+                            Content = new TextBlock
+                            {
+                                Text = group.Key + "  " + on + "/" + rows.Count, FontSize = 13,
+                                FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis,
+                            },
+                        };
+                        headBox.Click += (s, e) =>
+                        {
+                            var set = headBox.IsChecked == true;
+                            foreach (var item in rows) item.On = set;
+                            changed();
+                            Paint();
+                        };
+                        Grid.SetColumn(headBox, 1);
+                        header.Children.Add(headBox);
+                        list.Children.Add(new Border { Padding = new Thickness(0, 2, 0, 2), Child = header });
+                        if (!open) continue;
+                        foreach (var item in rows)
+                        {
+                            var child = Row(item);
+                            child.Margin = new Thickness(18, 0, 0, 0);
+                            list.Children.Add(child);
+                        }
                     }
-                    list.Children.Add(new Border { Padding = new Thickness(2, 3, 2, 3), Child = row });
                 }
+                else
+                    foreach (var item in items)
+                    {
+                        if (!Matches(item, needle)) continue;
+                        shown++;
+                        list.Children.Add(Row(item));
+                    }
                 if (shown == 0)
                     list.Children.Add(new TextBlock
                     {
@@ -144,7 +207,15 @@ namespace Hd2Qd.LobbyBrowser
             var body = new StackPanel { Width = 330 };
             body.Children.Add(head);
             body.Children.Add(search);
-            if (groups.Count > 0) body.Children.Add(new WrapPanel { Margin = new Thickness(0, 0, 0, 8), Children = { chips } });
+            // one scrollable row, not a wrapping block: dozens of sectors used to eat the popup
+            // and leave only two planet rows visible
+            if (!grouped && groups.Count > 0)
+                body.Children.Add(new ScrollViewer
+                {
+                    Height = 38, Margin = new Thickness(0, 0, 0, 8), Content = chips,
+                    HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+                    VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                });
             body.Children.Add(new ScrollViewer
             {
                 MaxHeight = 340, VerticalScrollBarVisibility = ScrollBarVisibility.Auto,

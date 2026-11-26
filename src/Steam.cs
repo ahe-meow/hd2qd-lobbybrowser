@@ -414,7 +414,7 @@ namespace Hd2Qd.LobbyBrowser
                 var count = -1;
                 if (call != 0)
                 {
-                    var until = DateTime.UtcNow.AddSeconds(2.5);
+                    var until = DateTime.UtcNow.AddSeconds(4.0);   // upstream's budget for a slow Steam answer
                     while (DateTime.UtcNow < until)
                     {
                         byte failed;

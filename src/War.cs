@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Net;
+using System.Threading;
 using System.Web.Script.Serialization;
 
 namespace Hd2Qd.LobbyBrowser
@@ -16,16 +18,28 @@ namespace Hd2Qd.LobbyBrowser
         const string Community = "https://api.helldivers2.dev/raw/api/WarSeason/{0}/status";
         const string Official = "https://api.live.prod.thehelldiversgame.com/api/WarSeason/{0}/status";
         const string Client = "HD2QD.LobbyBrowser";
+        const string Contact = "https://github.com/ahe-meow/hd2qd-lobbybrowser";
         const int FreshSeconds = 300;
         const int FailedSeconds = 60;
 
         static readonly object Gate = new object();
         static readonly JavaScriptSerializer Json = new JavaScriptSerializer { MaxJsonLength = int.MaxValue };
+        static Timer _warm;                  // upstream's WAR.warm(): read once at startup, then every TTL
         static Dictionary<int, List<string>> _planets = new Dictionary<int, List<string>>();
         static DateTime _at = DateTime.MinValue;
         static DateTime _until = DateTime.MinValue;
         static int _war = 801;                 // a season change is found by trying four ids
         static bool _loaded;
+        internal static string LastError;          // why the last war-status read failed, for diagnostics
+
+        /// <summary>HD2LobbyBrowser starts WAR.warm() as soon as it starts: the variant table is
+        /// ready before the first scan, and refreshed every five minutes. Do the same here, once
+        /// per process, so opening the variant picker does not depend on a scan having run.</summary>
+        internal static void Warm(string home)
+        {
+            lock (Gate)
+                if (_warm == null) _warm = new Timer(_ => Effects(home), null, 0, FreshSeconds * 1000);
+        }
 
         internal static Dictionary<int, List<string>> Effects(string home)
         {
@@ -43,6 +57,21 @@ namespace Hd2Qd.LobbyBrowser
                 }
                 return _planets;
             }
+        }
+
+        /// <summary>Planets carrying any of the selected variants. A variant is planet-level, so a
+        /// scan that only picks the busiest planets can miss it entirely; those planets join the
+        /// scan targets when a variant is ticked.</summary>
+        internal static List<int> PlanetsFor(Dictionary<int, List<string>> effects, IEnumerable<string> selected)
+        {
+            var wanted = new HashSet<string>(selected ?? Enumerable.Empty<string>(), StringComparer.OrdinalIgnoreCase);
+            if (wanted.Count == 0) return new List<int>();
+            var planets = new List<int>();
+            if (effects != null)
+                foreach (var pair in effects)
+                    if (pair.Value != null && pair.Value.Any(wanted.Contains)) planets.Add(pair.Key);
+            planets.Sort();
+            return planets;
         }
 
         static string FileOf(string home) => Path.Combine(string.IsNullOrEmpty(home)
@@ -112,11 +141,23 @@ namespace Hd2Qd.LobbyBrowser
                 request.Timeout = 8000;
                 request.ReadWriteTimeout = 8000;
                 request.UserAgent = Client;
+                // The community proxy rejects requests without these two headers; upstream sends
+                // them. The game's own status wants a language instead.
+                if (url.Contains("api.helldivers2.dev"))
+                {
+                    request.Headers["X-Super-Client"] = Client;
+                    request.Headers["X-Super-Contact"] = Contact;
+                }
+                else request.Headers["Accept-Language"] = "en-US";
                 using (var response = (HttpWebResponse)request.GetResponse())
                 using (var reader = new StreamReader(response.GetResponseStream()))
                     return Json.Deserialize<Dictionary<string, object>>(reader.ReadToEnd());
             }
-            catch { return null; }
+            catch (Exception e)
+            {
+                LastError = e.GetBaseException().Message;
+                return null;
+            }
         }
 
         static void Save(string home)
