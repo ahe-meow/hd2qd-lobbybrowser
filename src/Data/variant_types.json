@@ -9,7 +9,7 @@
    "Spore Burst Strain"
   ],
   "rupture": [
-   "裂地变种",
+   "爆裂虫族变种",
    "Rupture Strain"
   ],
   "jet": [
@@ -17,7 +17,7 @@
    "Jet Brigade"
   ],
   "incineration": [
-   "灼烧旅",
+   "炽灼部队",
    "Incineration Corps"
   ],
   "dragonroach": [
@@ -29,19 +29,19 @@
    "Hive Lords"
   ],
   "cyborg": [
-   "半机械人",
+   "生化人",
    "Cyborgs"
   ],
   "mindless": [
-   "无智群",
+   "无脑群氓",
    "Mindless Masses"
   ],
   "appropriator": [
-   "侵占者",
+   "占领者",
    "Appropriators"
   ],
   "votesnatch": [
-   "偷票者",
+   "窃票者",
    "Vote Snatchers"
   ],
   "invasion": [
@@ -49,11 +49,11 @@
    "Invasion Fleet"
   ],
   "greathost": [
-   "大群",
+   "大军",
    "The Great Host"
   ],
   "strider_surge": [
-   "工厂机兵激增",
+   "移动工厂激增",
    "Factory Strider Surge"
   ],
   "impaler_rampage": [
@@ -65,20 +65,28 @@
    "Spore Burst Scavenger Rampage"
   ],
   "charger_rampage": [
-   "冲锋虫暴走",
+   "强袭虫暴走",
    "Charger Rampage"
   ],
   "heavy_armor_surge": [
-   "重甲激增",
+   "重甲敌军激增",
    "Heavy Armor Surge"
   ],
   "hulk_surge": [
-   "浩克激增",
+   "巨型者激增",
    "Hulk Surge"
   ],
   "devastator_surge": [
    "蹂躏者激增",
    "Devastator Surge"
+  ],
+  "caustic": [
+   "腐蚀变种",
+   "Caustic Strain"
+  ],
+  "noxious": [
+   "毒瘴变种",
+   "Noxious Strain"
   ]
  },
  "effects": {
@@ -113,7 +121,11 @@
   "1293": "charger_rampage",
   "1355": "heavy_armor_surge",
   "1357": "hulk_surge",
-  "1359": "devastator_surge"
+  "1359": "devastator_surge",
+  "1430": "caustic",
+  "1431": "caustic",
+  "1433": "noxious",
+  "1434": "noxious"
  },
- "source": "galacticEffectId -> 变种；id 表来自 hd2api planetEffects（游戏数据），保留敌方变种/群袭类效果"
+ "source": "galacticEffectId -> 变种；id 表来自 hd2api planetEffects（游戏数据），保留敌方变种/群袭类效果。中文名取自游戏本体官方简中本地化（2026-11 版，filediver 提取 strings_galactic_war_cn / strings_names_cn / strings_hud_cn）：掠食变种/孢裂变种/爆裂虫族变种/喷气旅/炽灼部队/蟑龙/霸王虫/生化人/无脑群氓/占领者/窃票者/入侵舰队/重甲敌军激增/巨型者激增/蹂躏者激增/腐蚀变种/毒瘴变种为战争桌官方标题；大军（The Great Host）出自官方 HUD；移动工厂/穿刺虫/孢裂食腐虫/强袭虫为官方单位名，与官方'激增'后缀拼装（Factory Strider Surge、* Rampage 在官方 strings 中无条目，名称来自上游/社区）。2026-11-27 对照当前战争季（801）官方 planetActiveEffects 全量补齐：新增 1430/1431=腐蚀变种（Caustic Strain）、1433/1434=毒瘴变种（Noxious Strain），id→名映射来自 helldivers-2/json 仓库 effects/planetEffects.json（MIT）。其余未收录 id 均为环境/叙事/设施/友军类（Gloom 1187/1188、黑洞 1229、蜂巢星球 1311、SEAF 增援 1400/1401、TCS+ 1395 等），不属于敌方变种；1272/1312/1315-1320/1327/1333/1363/1365/1366 在 planetEffects.json 中暂无名称，出现于特定星球，待官方补录后再判别。"
 }
