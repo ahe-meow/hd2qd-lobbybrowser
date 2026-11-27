@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Threading;
 using System.Web.Script.Serialization;
 
 namespace Hd2Qd.LobbyBrowser
@@ -38,6 +39,39 @@ namespace Hd2Qd.LobbyBrowser
         static DateTime _at = DateTime.MinValue;
         static DateTime _until = DateTime.MinValue;
         static bool _loaded;
+
+        static Timer _warm;                  // upstream keeps a live table too; refresh it in the background
+
+        /// <summary>Upstream's STATS.warm(): read the table at startup, then on the same cadence
+        /// the scan uses, so the planet menu always shows recent player counts without a scan
+        /// having run. Fetch failures keep their cooldown, so this never hammers the API.</summary>
+        internal static void Warm(string home)
+        {
+            lock (Gate)
+                if (_warm == null) _warm = new Timer(_ => Tick(home), null, 0, FreshSeconds * 1000);
+        }
+
+        static void Tick(string home)
+        {
+            lock (Gate)
+            {
+                Load(home);
+                var now = DateTime.UtcNow;
+                if (_loaded && (now - _at).TotalSeconds < FreshSeconds
+                    && !(_counts.Count > 0 && _counts.Values.All(v => v <= 0)
+                        && (now - _at).TotalSeconds >= ZeroRetrySeconds)) return;
+                if (now < _until) return;
+                string note;
+                Fetch(home, "en", out note);
+            }
+        }
+
+        /// <summary>A copy of the cached player counts, for the planet menu. Never fetches: the
+        /// background warm timer owns the network, the menu only paints what is known.</summary>
+        internal static Dictionary<int, int> Counts()
+        {
+            lock (Gate) return new Dictionary<int, int>(_counts);
+        }
 
         /// <summary>The planets of these fronts with the most players, and a word for the status
         /// bar when the table could not be had (null when it could): the pick falls back to the

@@ -20,6 +20,8 @@ namespace Hd2Qd.LobbyBrowser
             internal string Key;
             internal string Text;
             internal string Note;
+            internal long Count;        // live players, as upstream's planet menu shows
+            internal bool Hot;          // count > 0: the note is painted yellow, as upstream's .warm
             internal string Group;      // sector for planets; a group header/chip when present
             internal bool On;
         }
@@ -80,7 +82,8 @@ namespace Hd2Qd.LobbyBrowser
                 {
                     var note = new TextBlock
                     {
-                        Text = item.Note, FontSize = 11, Foreground = Theme.B("Muted"),
+                        Text = item.Note, FontSize = 11,
+                        Foreground = item.Hot ? Theme.B("Yellow") : Theme.B("Muted"),
                         VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 2, 0),
                     };
                     Grid.SetColumn(note, 1);
@@ -96,8 +99,9 @@ namespace Hd2Qd.LobbyBrowser
                 var shown = 0;
                 if (grouped && groups.Count > 0)
                 {
-                    foreach (var group in items.Where(i => Matches(i, needle))
-                        .GroupBy(i => i.Group ?? "").OrderBy(g => g.Key, StringComparer.CurrentCulture))
+                    // groups keep the caller's order (the planet menu sorts sectors by live
+                    // players, descending), not an alphabetical one
+                    foreach (var group in items.Where(i => Matches(i, needle)).GroupBy(i => i.Group ?? ""))
                     {
                         shown++;
                         var rows = group.ToList();
@@ -106,6 +110,7 @@ namespace Hd2Qd.LobbyBrowser
                         var header = new Grid();
                         header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
                         header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                        header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
                         var arrow = new Button
                         {
                             Content = open ? "▾" : "▸", Style = Theme.S("Ghost"), Width = 22, MinHeight = 22,
@@ -137,6 +142,19 @@ namespace Hd2Qd.LobbyBrowser
                         };
                         Grid.SetColumn(headBox, 1);
                         header.Children.Add(headBox);
+                        // upstream's sector rows carry the sector's live-player total, warm yellow
+                        // when anyone is there
+                        var total = rows.Sum(i => i.Count);
+                        var headCount = new TextBlock
+                        {
+                            Text = total.ToString("N0", System.Globalization.CultureInfo.CurrentCulture),
+                            FontSize = 12,
+                            Foreground = total > 0 ? Theme.B("Yellow") : Theme.B("Muted"),
+                            VerticalAlignment = VerticalAlignment.Center,
+                            Margin = new Thickness(6, 0, 2, 0),
+                        };
+                        Grid.SetColumn(headCount, 2);
+                        header.Children.Add(headCount);
                         list.Children.Add(new Border { Padding = new Thickness(0, 2, 0, 2), Child = header });
                         if (!open) continue;
                         foreach (var item in rows)

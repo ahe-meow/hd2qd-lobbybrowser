@@ -58,6 +58,7 @@ namespace Hd2Qd.LobbyBrowser
             _closed = closed;
             _home = host != null && host.TryGetValue("home", out var home) ? home as string : null;
             War.Warm(_home);                   // upstream WAR.warm(): variants ready before the first scan
+            Live.Warm(_home);                  // upstream STATS.warm(): planet counts for the menu
             _handed = Words.Lang(host);
             Lang = Language.Chosen(_home) ?? Language.Manager(_home, _handed);
             Show(null);
@@ -101,6 +102,9 @@ namespace Hd2Qd.LobbyBrowser
             _root.Children.Clear();
             _page = new LobbyPage(Lang, _host, this, state);
             _root.Children.Add(_page.Root);
+            // upstream refreshes on open: a first visit scans right away with whatever filters
+            // were restored; if Steam is not running the list area says so instead
+            if (state == null) _page.Refresh();
         }
     }
 
@@ -789,7 +793,9 @@ namespace Hd2Qd.LobbyBrowser
         }
 
         /// <summary>The planets the scan should ask for, by name in the manager's language, in a
-        /// sector → planet menu: a sector's own tick box takes or leaves all its planets.</summary>
+        /// sector → planet menu: a sector's own tick box takes or leaves all its planets. As
+        /// upstream, sectors and planets carry their live player counts (the warm timer keeps
+        /// them fresh) and sort by them, busiest first; counts of zero sit at the bottom.</summary>
         void PickPlanets()
         {
             CloseFloats();
@@ -799,16 +805,34 @@ namespace Hd2Qd.LobbyBrowser
                 SetStatus(Words.Get(_lang, "planet_none"));
                 return;
             }
-            var items = rows.Select(p => new Picker.Item
+            var counts = Live.Counts();
+            long Count(PlanetRow p) => counts.TryGetValue(p.Index, out var n) ? n : 0;
+            var items = new List<Picker.Item>();
+            foreach (var sector in rows.GroupBy(p => p.Sector ?? "")
+                .Select(g => new { Key = g.Key, Rows = g.ToList(), Total = g.Sum(Count) })
+                .OrderByDescending(g => g.Total)
+                .ThenBy(g => g.Key, StringComparer.CurrentCulture))
             {
-                Key = p.Index.ToString(CultureInfo.InvariantCulture),
-                Text = p.Name,
-                // V28: group by sector so ticking a group takes a whole sector; the front is
-                // already a chip on the filter row, so it moves to the note.
-                Note = Tables.FrontName(p.Front, _lang),
-                Group = Tables.Sector(p.Index, _lang),
-                On = _planets.Contains(p.Index),
-            }).ToList();
+                foreach (var p in sector.Rows.OrderByDescending(Count).ThenBy(p => p.Name, StringComparer.CurrentCulture))
+                {
+                    var live = Count(p);
+                    var front = Tables.FrontName(p.Front, _lang);
+                    items.Add(new Picker.Item
+                    {
+                        Key = p.Index.ToString(CultureInfo.InvariantCulture),
+                        Text = p.Name,
+                        // V28: group by sector so ticking a group takes a whole sector. The note
+                        // keeps the front (the chip row is not beside this menu) and adds the live
+                        // player count, warm yellow when anyone is there — as upstream.
+                        Note = (string.IsNullOrEmpty(front) ? "" : front + " · ")
+                            + live.ToString("N0", CultureInfo.CurrentCulture),
+                        Hot = live > 0,
+                        Count = live,
+                        Group = sector.Key,
+                        On = _planets.Contains(p.Index),
+                    });
+                }
+            }
             _openPopup = Picker.Show(_planetButton, Words.Get(_lang, "planet_pick"), Words.Get(_lang, "filter_search"),
                 Words.Get(_lang, "filter_clear"), Words.Get(_lang, "filter_all"), Words.Get(_lang, "filter_invert"),
                 Words.Get(_lang, "filter_empty"), items, () =>

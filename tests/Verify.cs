@@ -519,6 +519,13 @@ namespace Hd2Qd.Verify
                 var pageText = File.ReadAllText(pageSrc);
                 Check("planet picker is a grouped tick menu", pickerText.Contains("IsThreeState") &&
                     pageText.Contains("grouped: true") && pageText.Contains("War.PlanetsFor"));
+                // upstream's planet menu shows live players: sectors carry their total, planets
+                // their own count, both warm yellow when non-zero, busiest first
+                Check("planet menu carries live counts", pickerText.Contains("internal long Count;") &&
+                    pickerText.Contains("total > 0 ? Theme.B(\"Yellow\") : Theme.B(\"Muted\")") &&
+                    pickerText.Contains("item.Hot ? Theme.B(\"Yellow\") : Theme.B(\"Muted\")") &&
+                    pageText.Contains("Live.Counts()") && pageText.Contains("OrderByDescending(g => g.Total)") &&
+                    pageText.Contains("OrderByDescending(Count)"));
                 // Region is upstream's local filter: the seven codes are ticked in their own
                 // menu and applied to the rows shown, not passed to the Steam lobby query.
                 Check("region filter is a local row filter",
@@ -543,8 +550,9 @@ namespace Hd2Qd.Verify
                 Check("determinate progress eases to its target",
                     pageText.Contains("new DoubleAnimation(_progressScale.ScaleX, target, TimeSpan.FromMilliseconds(280))") &&
                     pageText.Contains("EasingMode.EaseOut") && pageText.Contains("FillBehavior.HoldEnd"));
-                Check("open waits for a manual refresh", !pageText.Contains("shell.Refresh();") &&
-                    pageText.Contains("SteamRunning()") && pageText.Contains("steam_not_running"));
+                Check("open refreshes at once, like upstream", pageText.Contains("if (state == null) _page.Refresh();") &&
+                    pageText.Contains("SteamRunning()") && pageText.Contains("steam_not_running") &&
+                    pageText.Contains("Live.Warm(_home)"));
                 // 0.25's acrylic paints Ground900 translucent behind a tab. A second, opaque
                 // Ground900 on the content root hides that texture and looks black beside the
                 // margin, so the root must stay transparent and let the host's ground show.

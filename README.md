@@ -42,7 +42,11 @@ invert menu, with a count from the current results, and are applied to the rows 
 data is read — never passed into the Steam query. The variant table's Chinese names are the game's
 own Simplified Chinese localisation (read out of the game's data files, not paraphrased), and the
 table now carries the two late-2026 Terminid strains the upstream data predates: **Caustic Strain**
-(effects 1430/1431) and **Noxious Strain** (effects 1433/1434).
+(effects 1430/1431) and **Noxious Strain** (effects 1433/1434). The tab scans the moment it opens,
+as upstream does; when Steam is not running the list area says so instead. The sector → planet
+menu shows live player counts — each sector's total next to its name, each planet's count beside
+it, both warm yellow when anyone is there — and sorts sectors and planets by them, busiest first.
+A background timer keeps those counts fresh, so the menu is right even before a scan.
 
 The filter row is one line of three groups, a hairline between them: what opens something
 (Refresh, Planet, Difficulty, Mission, Map, Variant, Region, Presets), the three fronts as chips, and the four switches —
@@ -248,6 +252,9 @@ the plugin contract of
 可全选 / 反选的菜单，项旁是当前结果里的房间数；过滤发生在房间数据读出之后，不会写进 Steam 查询。
 变种表的中文取自游戏本体官方简中本地化（从游戏数据文件提取，非转译），并补上上游数据尚未收录的
 2026 年末两个虫族变种：**腐蚀变种**（Caustic Strain，效果 1430/1431）与**毒瘴变种**（Noxious Strain，效果 1433/1434）。
+打开插件即自动刷新（同上游）；Steam 未启动时列表区域会直接说明。
+分区 → 星球菜单显示实时在线人数：分区名旁是分区合计，星球旁是各自人数，有人时以暖黄标出，
+分区与星球都按人数从多到少排列；后台定时器保持人数新鲜，未扫描前菜单也是准的。
 **预设**把这些条件
 （星球、战线、难度、开关、任务、地图、变种、地区、排序）连同名字存起来，一键套回；存在管理器设置目录下插件自己的文件夹里的
 `presets.json`。每个名字独占一行，**载入**与**删除**就在同一行右侧——预设再多也只占“每套一行”，
