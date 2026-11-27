@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- ApiProbe.exe: a stand-alone diagnostic for the online APIs the lobby browser uses.
+       Same runtime stack as the plugin (net48 HttpWebRequest), so what it reports is what
+       the plugin lives through. Build with: dotnet build -c Release
+       Output lands in release\ApiProbe.exe (see build-probe.bat). -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <AssemblyName>ApiProbe</AssemblyName>
+    <RootNamespace>Hd2Qd.ApiProbe</RootNamespace>
+    <Version>1.10.0</Version>
+    <Product>HD2QD Lobby Browser API Probe</Product>
+    <Company>ahe-meow</Company>
+    <Copyright>MIT License</Copyright>
+    <DebugType>none</DebugType>
+  </PropertyGroup>
+
+</Project>
